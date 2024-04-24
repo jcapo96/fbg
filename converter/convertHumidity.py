@@ -7,7 +7,7 @@ class HumConverter():
     def __init__(self, humFilename, outputRootFileName):
         self.humFilename        = humFilename #has to contain the full path
         self.outputRootFileName = outputRootFileName #has to contain the full path
-        self.header             = ["epochTime", "hum", "temp"]
+        self.header             = ["t", "hum", "temp"]
         self.dataTypes          = ["d", "d", "d"]
         self.treeNames          = ["hum"]
 

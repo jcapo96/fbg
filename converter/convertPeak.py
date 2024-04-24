@@ -1,8 +1,10 @@
 import os, csv
 import pandas as pd
-import ROOT, array
+import ROOT
 from datetime import datetime, timedelta
 from tqdm import tqdm
+import numpy as np
+import subprocess
 
 def reshapeEpochTime(timestamp):
     return (datetime.utcfromtimestamp(timestamp*10**-9) - timedelta(days=70*365+17)).timestamp()
@@ -13,7 +15,8 @@ class PeakConverter():
         self.outputRootFileName = outputRootFileName #has to contain the full path
         self.header             = None
         self.nSensors           = None
-        self.treeNames          = ["peakP", "peakS"]
+        self.treeNames          = ["peak"]
+        self.nPols              = 2
 
     def createHeader(self):
         self.header = ["timeStamp", "epochTime", "errorFlag0", "sweepNumber"]
@@ -73,7 +76,7 @@ class PeakConverter():
             else:
                 return False
 
-    def fillRootFile(self, chunksize=None):
+    def fillRootFile(self, chunksize=1e6):
         if self.header is None:
             #Checks if the header is already created in the class, if not, it creates the header
             self.createHeader()
@@ -86,68 +89,107 @@ class PeakConverter():
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile. \n")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
-            outputTreeP = ROOT.TTree(self.treeNames[0], "P-Peaks fitted by I4G")
-            outputTreeS = ROOT.TTree(self.treeNames[1], "S-Peaks fitted by I4G")
-            valuesToFill = {}
-            for index, element in enumerate(self.header):
-                if "Wav" in element or "Ptime" in element or "epoch" in element:
-                    valuesToFill[f"p{element}"] = array.array(self.dataTypes[index], [0.0])
-                    outputTreeP.Branch(f"{element}", valuesToFill[f"p{element}"], f"p{element}/D")
-                    valuesToFill[f"s{element}"] = array.array(self.dataTypes[index], [0.0])
-                    outputTreeS.Branch(f"{element}", valuesToFill[f"s{element}"], f"s{element}/D")
-                else:
-                    continue
+            outputTree = ROOT.TTree(self.treeNames[0], "Peaks fitted by I4G")
+
+            t = np.array([0.0 for _ in range(self.nPols)])
+            wav = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols))
+            sweep = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
+            ch = np.array([0.0 for _ in range(self.nSensors)])
+            pos = np.array([0.0 for _ in range(self.nSensors)])
+
+            outputTree.Branch("t", t, f"t[{self.nPols}]/D")
+            outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
+            outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{self.nSensors}]/D")
+            outputTree.Branch("ch", ch, f"ch[{self.nSensors}]/D")
+            outputTree.Branch("pos", pos, f"pos[{self.nSensors}]/D")
+
             outputFile.cd()
-            outputTreeP.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
-            outputTreeS.Write(self.treeNames[1], ROOT.TObject.kWriteDelete)
+            outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
             outputFile.Close()
 
         print(f"Start filling: '{self.outputRootFileName}' from file: '{self.peakFileName}'")
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
-        outputTreeP = outputFile.Get(self.treeNames[0])
-        outputTreeS = outputFile.Get(self.treeNames[1])
-        valuesToFill = {}
-        for index, element in enumerate(self.header):
-            if "Wav" in element or "Ptime" in element or "epoch" in element:
-                valuesToFill[f"p{element}"] = array.array(self.dataTypes[index], [0.0])
-                valuesToFill[f"s{element}"] = array.array(self.dataTypes[index], [0.0])
-                outputTreeP.SetBranchAddress(f"{element}", valuesToFill[f"p{element}"])
-                outputTreeS.SetBranchAddress(f"{element}", valuesToFill[f"s{element}"])
-            else:
-                continue
+        outputTree = outputFile.Get(self.treeNames[0])
+
+        t = np.array([0.0 for _ in range(self.nPols)])
+        wav = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        sweep = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        ch = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        pos = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+
+        outputTree.SetBranchAddress("t", t)
+        outputTree.SetBranchAddress("wav", wav)
+        outputTree.SetBranchAddress("sweep", sweep)
+        outputTree.SetBranchAddress("ch", ch)
+        outputTree.SetBranchAddress("pos", pos)
+
         peakData = pd.read_csv(self.peakFileName, sep="\t", header=None, names=self.header,
                                chunksize=chunksize, on_bad_lines="warn")
-        peakData["epochTime"] = peakData["epochTime"].apply(reshapeEpochTime)
+
+        result = subprocess.run(['wc', '-l', self.peakFileName], capture_output=True, text=True)
+        line_count = int(result.stdout.split()[0])
+
         if chunksize is not None:
-            for nChunk, chunk in enumerate(peakData):
-                for index, row in chunk.iterrows():
-                    for element in chunk.columns:
-                        if (index%2 == True) and ("Wav" in element or "Ptime" in element or "epoch" in element):
-                            valuesToFill[f"p{element}"][0] = (row[element])
-                        elif (index%2 == False) and ("Wav" in element or "Ptime" in element or "epoch" in element):
-                            valuesToFill[f"s{element}"][0] = (row[element])
-                    if index%2 == True:
-                        outputTreeP.Fill()
-                    elif index%2 == False:
-                        outputTreeS.Fill()
+            with tqdm(total=line_count) as pbar:
+                for nChunk, chunk in enumerate(peakData):
+                    chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
+                    for index, row in chunk.iterrows():
+                        nSens = 0
+                        for element in chunk.columns:
+                            if (index%2 == True):
+                                if "epoch" in element:
+                                    t[0] = row[element]
+                                elif "Wav" in element:
+                                    wav[0][nSens] = row[element]
+                                    ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
+                                    pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                elif "Ptime" in element:
+                                    sweep[0][nSens] = row[element]
+                                    nSens += 1
+                            elif (index%2 == False):
+                                if "epoch" in element:
+                                    t[1] = row[element]
+                                elif "Wav" in element:
+                                    wav[1][nSens] = row[element]
+                                    ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
+                                    pos[1][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                elif "Ptime" in element:
+                                    sweep[0][nSens] = row[element]
+                                    nSens += 1
+                        if index%2 == True:
+                            outputTree.Fill()
+                        pbar.update(1)
         elif chunksize is None:
             chunk = peakData
+            chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
             print(f"{len(chunk)} entries in total:")
             with tqdm(total=len(chunk)) as pbar:
                 for index, row in chunk.iterrows():
-                    # if index > 10000:
-                    #     break
-                    pbar.update(1)
+                    nSens = 0
                     for element in chunk.columns:
-                        if (index%2 == True) and ("Wav" in element or "Ptime" in element or "epoch" in element):
-                            valuesToFill[f"p{element}"][0] = (row[element])
-                        elif (index%2 == False) and ("Wav" in element or "Ptime" in element or "epoch" in element):
-                            valuesToFill[f"s{element}"][0] = (row[element])
+                        if (index%2 == True):
+                            if "epoch" in element:
+                                t[0] = row[element]
+                            elif "Wav" in element:
+                                wav[0][nSens] = row[element]
+                                ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
+                                pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                            elif "Ptime" in element:
+                                sweep[0][nSens] = row[element]
+                                nSens += 1
+                        elif (index%2 == False):
+                            if "epoch" in element:
+                                t[1] = row[element]
+                            elif "Wav" in element:
+                                wav[1][nSens] = row[element]
+                                ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
+                                pos[1][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                            elif "Ptime" in element:
+                                sweep[0][nSens] = row[element]
+                                nSens += 1
                     if index%2 == True:
-                        outputTreeP.Fill()
-                    elif index%2 == False:
-                        outputTreeS.Fill()
+                        outputTree.Fill()
+                    pbar.update(1)
         outputFile.cd()
-        outputTreeP.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
-        outputTreeS.Write(self.treeNames[1], ROOT.TObject.kWriteDelete)
+        outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
         outputFile.Close()

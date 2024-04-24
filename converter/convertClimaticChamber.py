@@ -8,7 +8,7 @@ class climaticChamberConverter():
     def __init__(self, climaticChamberFileName, outputRootFileName):
         self.climaticChamberFilename = climaticChamberFileName #has to contain the full path
         self.outputRootFileName      = outputRootFileName #has to contain the full path
-        self.header                  = ["epochTime", "objtemp", "hum", "objhum", "temp"]
+        self.header                  = ["t", "objtemp", "objhum", "hum", "temp"]
         self.dataTypes               = ["d", "d", "d", "d", "d"]
         self.treeNames               = ["cc"]
 
@@ -16,8 +16,8 @@ class climaticChamberConverter():
         self.df = pd.read_csv(self.climaticChamberFilename, sep=";",
                               header=0, names=self.header, on_bad_lines="warn",
                               dtype=float, decimal=",")
-        self.df['epochTime'] = pd.to_numeric(self.df['epochTime'], errors='coerce')
-        self.df["epochTime"] = (pd.to_datetime(self.df["epochTime"], unit='d', origin='1899-12-30')).astype(int) // 10**9
+        self.df['t'] = pd.to_numeric(self.df['t'], errors='coerce')
+        self.df["t"] = (pd.to_datetime(self.df["t"], unit='d', origin='1899-12-30')).astype(int) // 10**9
         return self
 
     def checkFileExists(self):

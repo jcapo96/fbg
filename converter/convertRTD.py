@@ -1,5 +1,6 @@
 import os, csv
 import pandas as pd
+import numpy as np
 import ROOT, array
 from tqdm import tqdm
 
@@ -74,25 +75,35 @@ class RTDConverter():
             print(f"Trees: {self.treeNames} not existing in the rootfile.")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
             outputTree = ROOT.TTree(self.treeNames[0], "Temperature measured by RTDs")
-            valuesToFill = {}
-            for index, element in enumerate(self.header):
-                valuesToFill[f"{element}"] = array.array(self.dataTypes[index], [0.0])
-                outputTree.Branch(f"{element}", valuesToFill[f"{element}"], f"{element}/D")
+            t = np.array([0.0])
+            temp = np.array([0.0 for _ in range(self.nSensors)])
+
+            outputTree.Branch("t", t, f"t/D")
+            outputTree.Branch("temp", temp, f"temp[{self.nSensors}]/D")
+
             outputFile.cd()
             outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
             outputFile.Close()
         print(f"Start filling: '{self.outputRootFileName}' from file: '{self.rtdFilename}'")
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
-        valuesToFill = {}
-        for index, element in enumerate(self.header):
-            valuesToFill[f"{element}"] = array.array(self.dataTypes[index], [0.0])
-            outputTree.SetBranchAddress(f"{element}", valuesToFill[f"{element}"])
+
+        t = np.array([0.0])
+        temp = np.array([0.0 for _ in range(self.nSensors)])
+
+        outputTree.SetBranchAddress("t", t)
+        outputTree.SetBranchAddress("temp", temp)
+
         print(f"{len(self.df)} entries in total.")
         with tqdm(total=len(self.df)) as pbar:
             for index, row in self.df.iterrows():
+                nSens = 0
                 for element in self.df.columns:
-                    valuesToFill[f"{element}"][0] = (row[element])
+                    if "epoch" in element:
+                        t[0] = row[element]
+                    else:
+                        temp[nSens] = row[element]
+                        nSens += 1
                 outputTree.Fill()
                 pbar.update(1)
 
