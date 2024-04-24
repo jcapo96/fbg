@@ -32,11 +32,6 @@ class makeROOTfile():
         self.outputRootFileName = f"{self.convertedDirectory}/{third}.root"
         return self
 
-    def loadLogFile(self):
-        path = "/eos/user/j/jcapotor/FBGdata/MAPPING/LogFile.xlsx"
-        logFile = pd.read_excel(path, sheet_name="all")
-
-
     def make(self):
         if os.path.exists(self.outputRootFileName):
             os.remove(self.outputRootFileName)
@@ -61,7 +56,7 @@ class makeROOTfile():
                 spectrum.fillRootFile()
                 # except:
                 #     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
-            if "pesak" in fileName:
+            if "peak" in fileName:
                 # try:
                 print("\n ******* Using Peak Converter *******")
                 peak = PeakConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
@@ -90,9 +85,17 @@ class makeROOTfile():
                 except:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
 
-m = makeROOTfile(
-    rawDirectory="/eos/user/j/jcapotor/FBGdata/Data/camara_climatica/202404AprilRuns/20240423",
-    )
 
-m.make()
+path = "/eos/user/j/jcapotor/FBGdata/MAPPING/LogFile.xlsx"
+logFile = pd.read_excel(path, sheet_name="all")
+
+for index, row in logFile.iterrows():
+    try:
+        m = makeROOTfile(
+            rawDirectory=row["RAW-FOLDER"],
+        )
+        m.make()
+    except Exception as e:
+        print(f"Error on file {row['RAW-FOLDER']}")
+        continue
 

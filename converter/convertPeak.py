@@ -138,21 +138,21 @@ class PeakConverter():
                         for element in chunk.columns:
                             if (index%2 == True):
                                 if "epoch" in element:
-                                    t[0] = row[element]
-                                elif "Wav" in element:
-                                    wav[0][nSens] = row[element]
-                                    ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
-                                    pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
-                                elif "Ptime" in element:
-                                    sweep[0][nSens] = row[element]
-                                    nSens += 1
-                            elif (index%2 == False):
-                                if "epoch" in element:
                                     t[1] = row[element]
                                 elif "Wav" in element:
                                     wav[1][nSens] = row[element]
                                     ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
                                     pos[1][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                elif "Ptime" in element:
+                                    sweep[1][nSens] = row[element]
+                                    nSens += 1
+                            elif (index%2 == False):
+                                if "epoch" in element:
+                                    t[0] = row[element]
+                                elif "Wav" in element:
+                                    wav[0][nSens] = row[element]
+                                    ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
+                                    pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
                                 elif "Ptime" in element:
                                     sweep[0][nSens] = row[element]
                                     nSens += 1
