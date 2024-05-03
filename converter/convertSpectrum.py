@@ -93,8 +93,8 @@ class SpectrumConverter():
         channelsRead = []
         with tqdm(total=file_size, unit='bytes', unit_scale=True) as pbar:
             while persistentRead == True:
-                if nEvent > 10:
-                    persistentRead = False
+                # if nEvent > 10:
+                #     persistentRead = False
                 try:
                     if int(np.sum(channelsRead)) == int(np.sum([0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12, 5, 14, 7])):
                         channelsRead = []
