@@ -1,0 +1,43 @@
+000 (11451992.180.000) 01/28 14:31:49 Job submitted from host: <188.185.114.121:9618?addrs=188.185.114.121-9618+[2001-1458-d00-a--100-273]-9618&alias=bigbird19.cern.ch&noUDP&sock=schedd_2045_4743>
+...
+040 (11451992.180.000) 01/28 14:40:22 Started transferring input files
+	Transferring to host: <128.142.248.112:9618?addrs=128.142.248.112-9618+[2001-1458-301-73--100-160]-9618&alias=b9g23p1260.cern.ch&noUDP&sock=slot1_19_3380_4403_24239>
+...
+040 (11451992.180.000) 01/28 14:40:22 Finished transferring input files
+...
+001 (11451992.180.000) 01/28 14:40:23 Job executing on host: <128.142.248.112:9618?addrs=128.142.248.112-9618+[2001-1458-301-73--100-160]-9618&alias=b9g23p1260.cern.ch&noUDP&sock=startd_3326_f015>
+	SlotName: slot1_19@b9g23p1260.cern.ch
+	CondorScratchDir = "/pool/condor/dir_330817"
+	Cpus = 1
+	Disk = 2995457
+	Memory = 3000
+...
+006 (11451992.180.000) 01/28 14:40:31 Image size of job updated: 83952
+	82  -  MemoryUsage of job (MB)
+	83952  -  ResidentSetSize of job (KB)
+...
+006 (11451992.180.000) 01/28 14:40:38 Image size of job updated: 85636
+	82  -  MemoryUsage of job (MB)
+	83952  -  ResidentSetSize of job (KB)
+...
+040 (11451992.180.000) 01/28 14:40:38 Started transferring output files
+...
+040 (11451992.180.000) 01/28 14:40:38 Finished transferring output files
+...
+005 (11451992.180.000) 01/28 14:40:38 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 0 00:00:13, Sys 0 00:00:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:13, Sys 0 00:00:00  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	14886  -  Run Bytes Sent By Job
+	5797  -  Run Bytes Received By Job
+	14886  -  Total Bytes Sent By Job
+	5797  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :                 1         1 
+	   Disk (KB)            :       35       10   2995457 
+	   Memory (MB)          :       82     3000      3000 
+
+	Job terminated of its own accord at 2025-01-28T13:40:38Z with exit-code 0.
+...

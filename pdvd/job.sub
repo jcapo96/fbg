@@ -1,0 +1,10 @@
+executable = run_script.sh
+arguments = $(filename)
+output = logs/$(filename).out
+error = logs/$(filename).err
+log = logs/$(filename).log
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files = script.py, run_script.sh
++MaxRuntime = 36000
+queue filename from file_list.txt

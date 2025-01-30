@@ -1,0 +1,204 @@
+CHANNEL_0_1
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1544.603951    0.000181  0.000048  ...  0.000012  7.675281e+06  1.735807e+09
+1  1544.612612    0.000174  0.000058  ...  0.000012  7.680610e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_2
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1545.431672    0.000094  0.000019  ...  0.000012  7.660485e+06  1.735807e+09
+1  1545.433686    0.000094  0.000021  ...  0.000012  7.645689e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_3
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1546.110620    0.000107  0.000037  ...  0.000012  7.680497e+06  1.735807e+09
+1  1546.119532    0.000109  0.000053  ...  0.000012  7.675537e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_4
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1547.111129    0.000115  0.000047  ...  0.000012  7.853220e+06  1.735807e+09
+1  1547.113068    0.000112  0.000049  ...  0.000012  7.863622e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_5
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1548.084966    0.000092  0.000041  ...  0.000012  7.698995e+06  1.735807e+09
+1  1548.090130    0.000094  0.000038  ...  0.000012  7.705313e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_6
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1549.063035    0.000078  0.000023  ...  0.000012  7.569589e+06  1.735807e+09
+1  1549.072614    0.000083  0.000044  ...  0.000012  7.471005e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_7
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1550.067975    0.000125  0.000046  ...  0.000012  7.596873e+06  1.735807e+09
+1  1550.070756    0.000125  0.000049  ...  0.000012  7.612128e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_8
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1551.043290    0.000073  0.000015  ...  0.000012  7.620062e+06  1.735807e+09
+1  1551.050827    0.000072  0.000018  ...  0.000012  7.638847e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_9
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1552.024728     0.00009  0.000016  ...  0.000012  7.737855e+06  1.735807e+09
+1  1552.034709     0.00009  0.000030  ...  0.000012  7.676326e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_10
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1553.034638    0.000093  0.000021  ...  0.000012  7.689843e+06  1.735807e+09
+1  1553.035848    0.000090  0.000016  ...  0.000012  7.744724e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_11
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1554.039529    0.000075  0.000009  ...  0.000012  7.653966e+06  1.735807e+09
+1  1554.049217    0.000072  0.000015  ...  0.000012  7.653706e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_12
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1555.067907    0.000119  0.000048  ...  0.000012  7.497866e+06  1.735807e+09
+1  1555.070228    0.000118  0.000047  ...  0.000012  7.511503e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_13
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1556.040161    0.000140  0.000036  ...  0.000012  7.659627e+06  1.735807e+09
+1  1556.048545    0.000137  0.000046  ...  0.000012  7.700835e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_0_14
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1557.012865    0.000098  0.000027  ...  0.000012  7.661047e+06  1.735807e+09
+1  1557.017283    0.000101  0.000036  ...  0.000012  7.618355e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_1_1
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1556.156154    0.000958  0.001643  ...  0.000012  3.344440e+06  1.735807e+09
+1  1556.156104    0.000080  0.000006  ...  0.000012  2.678470e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_1_2
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1558.198769    0.000125  0.000022  ...  0.000012  2.802832e+06  1.735807e+09
+1  1558.201394    0.000138  0.000027  ...  0.000012  2.747857e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_1_3
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1561.017199    0.000529  0.000614  ...  0.000012  3.298752e+06  1.735807e+09
+1  1561.013923    0.000071  0.000008  ...  0.000012  2.904778e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_2_1
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1543.576862    0.000074  0.000005  ...  0.000012  2.771518e+06  1.735807e+09
+1  1543.576078    0.000097  0.000005  ...  0.000012  2.771613e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_2_2
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1545.923416    0.000305  0.000060  ...  0.000012  2.540579e+06  1.735807e+09
+1  1545.924074    0.000122  0.000011  ...  0.000012  2.704286e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_2_3
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1548.522023    0.000838  0.001217  ...  0.000012  3.494595e+06  1.735807e+09
+1  1548.523105    0.000097  0.000010  ...  0.000012  2.892753e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_1
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1544.123401    0.000117  0.000029  ...  0.000012  7.761588e+06  1.735807e+09
+1  1544.121659    0.000154  0.000019  ...  0.000012  7.815186e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_2
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1545.012715    0.000110  0.000022  ...  0.000012  7.917733e+06  1.735807e+09
+1  1545.023369    0.000289  0.000038  ...  0.000012  7.825033e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_3
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1545.704526    0.000112  0.000034  ...  0.000012  7.569772e+06  1.735807e+09
+1  1545.707484    0.000114  0.000026  ...  0.000012  7.608922e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_4
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1546.676454    0.000097  0.000017  ...  0.000012  7.800416e+06  1.735807e+09
+1  1546.684111    0.000100  0.000028  ...  0.000012  7.740733e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_5
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1547.696265    0.000077  0.000014  ...  0.000012  7.585160e+06  1.735807e+09
+1  1547.703917    0.000074  0.000012  ...  0.000012  7.637681e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_6
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1548.685050    0.000083  0.000016  ...  0.000012  7.756344e+06  1.735807e+09
+1  1548.688009    0.000080  0.000016  ...  0.000012  7.774825e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_7
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1549.699930    0.000086  0.000014  ...  0.000012  7.636315e+06  1.735807e+09
+1  1549.711045    0.000086  0.000020  ...  0.000012  7.600667e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_8
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1550.662790    0.000089  0.000016  ...  0.000012  7.624015e+06  1.735807e+09
+1  1550.660823    0.000094  0.000014  ...  0.000012  7.654476e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_9
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1551.652876    0.000092  0.000011  ...  0.000012  7.773476e+06  1.735807e+09
+1  1551.662801    0.000090  0.000018  ...  0.000012  7.693409e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_10
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1552.666958    0.000121  0.000028  ...  0.000012  7.486579e+06  1.735807e+09
+1  1552.663731    0.000114  0.000014  ...  0.000012  7.746611e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_11
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1553.629856    0.000133  0.000027  ...  0.000012  7.923900e+06  1.735807e+09
+1  1553.634175    0.000167  0.000059  ...  0.000012  7.514402e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_12
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1554.609016    0.000096  0.000019  ...  0.000012  7.751100e+06  1.735807e+09
+1  1554.608475    0.000103  0.000014  ...  0.000012  7.812866e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_13
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1555.611406    0.000088  0.000009  ...  0.000012  7.647356e+06  1.735807e+09
+1  1555.619788    0.000085  0.000016  ...  0.000012  7.588108e+06  1.735807e+09
+
+[2 rows x 13 columns]
+CHANNEL_3_14
+        cbragg  cbragg_err   credchi  ...  cdelta_n            cL     timestamp
+0  1556.571861    0.000185  0.000075  ...  0.000012  7.646560e+06  1.735807e+09
+1  1556.568934    0.000189  0.000049  ...  0.000012  7.757146e+06  1.735807e+09
+
+[2 rows x 13 columns]

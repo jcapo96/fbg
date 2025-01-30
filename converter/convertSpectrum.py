@@ -10,7 +10,7 @@ class SpectrumConverter():
         self.outputRootFileName      = outputRootFileName #has to contain the full path
         self.treeNames = ["spectrum"]
         self.header = ["packetSize", "epochTime", "validityFlag", "channelN", "fibreN", "startWL", "endWL", "nPoints", "amplitude"]
-        self.channels = [0,1]
+        self.channels = [0,1,2]
         self.nPols = 2
 
     def checkFileExists(self):
