@@ -1,2 +1,4 @@
 *.png
-*venv*
+venv/
+pdvd/logs/
+*.ipynb
