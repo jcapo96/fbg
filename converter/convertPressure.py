@@ -4,34 +4,25 @@ import numpy as np
 import ROOT, array
 from tqdm import tqdm
 
-class RTDConverter():
-    def __init__(self, rtdFilename, outputRootFileName):
-        self.rtdFilename        = rtdFilename #has to contain the full path
+class PressureConverter():
+    def __init__(self, pressFilename, outputRootFileName):
+        self.pressFilename        = pressFilename #has to contain the full path
         self.outputRootFileName = outputRootFileName #has to contain the full path
         self.header             = None
-        self.nSensors           = None
-        self.treeNames          = ["temp"]
+        self.nSensors           = 1
+        self.treeNames          = ["press"]
 
     def prepareData(self):
-        self.header = ["Date", "Time"]
+        self.header = ["Datetime", "Pressure"]
         self.dataTypes = []
-        with open(self.rtdFilename, "r") as csvFile:
-            csvReader = csv.reader(csvFile)
-            firstLine = next(csvReader)[0].split("\t")
-        self.nSensors = len(firstLine) - 2
-        for n in range(self.nSensors):
-            self.header.append(f"s{n+1}")
-            self.dataTypes.append("d")
-        self.df = pd.read_csv(self.rtdFilename, sep="\t", header=None, names=self.header)
+        self.df = pd.read_csv(self.pressFilename, sep=",", header=None, names=self.header)
         # Combine "Date" and "Time" columns into a single datetime column
-        try:
-            self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"], format='%d/%m/%Y %H:%M:%S')
-        except:
-            self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"], format='%m/%d/%Y %H:%M:%S %p')
+        print(self.df)
+        self.df["Datetime"] = pd.to_datetime(self.df["Datetime"], format='%Y-%m-%d %H:%M:%S')
         # Convert datetime to epoch time
         self.df["epochTime"] = self.df["Datetime"].astype(int) * 10**-9  # Convert nanoseconds to seconds
         # Drop the original "Date", "Time", and "Datetime" columns
-        self.df.drop(["Date", "Time", "Datetime"], axis=1, inplace=True)
+        self.df.drop(["Datetime"], axis=1, inplace=True)
         print(len(self.df))
         self.dataTypes.append("d") #add the u-long for the timestamp
         self.header = self.df.columns
@@ -77,25 +68,25 @@ class RTDConverter():
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile.")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
-            outputTree = ROOT.TTree(self.treeNames[0], "Temperature measured by RTDs")
+            outputTree = ROOT.TTree(self.treeNames[0], "Pressure measured by pressure gauge")
             t = np.array([0.0])
-            temp = np.array([0.0 for _ in range(self.nSensors)])
+            press = np.array([0.0 for _ in range(self.nSensors)])
 
             outputTree.Branch("t", t, f"t/D")
-            outputTree.Branch("temp", temp, f"temp[{self.nSensors}]/D")
+            outputTree.Branch("press", press, f"press[{self.nSensors}]/D")
 
             outputFile.cd()
             outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
             outputFile.Close()
-        print(f"Start filling: '{self.outputRootFileName}' from file: '{self.rtdFilename}'")
+        print(f"Start filling: '{self.outputRootFileName}' from file: '{self.pressFilename}'")
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
 
         t = np.array([0.0])
-        temp = np.array([0.0 for _ in range(self.nSensors)])
+        press = np.array([0.0 for _ in range(self.nSensors)])
 
         outputTree.SetBranchAddress("t", t)
-        outputTree.SetBranchAddress("temp", temp)
+        outputTree.SetBranchAddress("press", press)
 
         print(f"{len(self.df)} entries in total.")
         with tqdm(total=len(self.df)) as pbar:
@@ -105,7 +96,7 @@ class RTDConverter():
                     if "epoch" in element:
                         t[0] = row[element]
                     else:
-                        temp[nSens] = row[element]
+                        press[nSens] = row[element]
                         nSens += 1
                 outputTree.Fill()
                 pbar.update(1)

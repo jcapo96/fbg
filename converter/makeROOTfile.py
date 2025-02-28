@@ -1,18 +1,17 @@
 import os, sys
+import pandas as pd
 
 current_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 print(current_directory)
 if current_directory not in sys.path:
     sys.path.insert(0, current_directory)
-import pandas as pd
 
 from convertSpectrum import SpectrumConverter
 from convertPeak import PeakConverter
 from convertClimaticChamber import climaticChamberConverter
 from convertRTD import RTDConverter
 from convertHumidity import HumConverter
-
-import os, sys
+from convertPressure import PressureConverter
 
 class makeROOTfile():
     def __init__(self, rawDirectory):
@@ -49,39 +48,46 @@ class makeROOTfile():
             print(fileName)
             if "LOG" in fileName.upper():
                 continue
-            if "spectrum" in fileName:
-                # try:
-                print(f"\n ******* Using Spectrum Converter ******* \n")
-                spectrum = SpectrumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
-                spectrum.fillRootFile()
-                # except:
-                #     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
-            if "peak" in fileName:
-                # try:
-                print("\n ******* Using Peak Converter *******")
-                peak = PeakConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
-                peak.fillRootFile()
-                # except:
-                #     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+            if "spectrumf" in fileName:
+                try:
+                    print(f"\n ******* Using Spectrum Converter ******* \n")
+                    spectrum = SpectrumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    spectrum.fillRootFile()
+                except:
+                    print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+            if "peakf" in fileName:
+                try:
+                    print("\n ******* Using Peak Converter *******")
+                    peak = PeakConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    peak.fillRootFile()
+                except:
+                    print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
             if "temperature" in fileName:
-                # try:
-                print("\n ******* Using RTD Converter *******")
-                peak = RTDConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
-                peak.fillRootFile()
-                # except:
-                #     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                try:
+                    print("\n ******* Using RTD Converter *******")
+                    temp = RTDConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    temp.fillRootFile()
+                except:
+                    print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
             if "humidity" in fileName:
                 try:
                     print("\n ******* Using Humidity Converter *******")
-                    peak = HumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
-                    peak.fillRootFile()
+                    hum = HumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    hum.fillRootFile()
                 except:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
             if "CLIMATIC" in fileName.upper():
                 try:
                     print("\n ******* Using Climatic Chamber Converter *******")
-                    peak = climaticChamberConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
-                    peak.fillRootFile()
+                    climatic = climaticChamberConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    climatic.fillRootFile()
+                except:
+                    print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+            if "pressure" in fileName:
+                try:
+                    print("\n ******* Using Pressure Converter *******")
+                    press = PressureConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
+                    press.fillRootFile()
                 except:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
 
@@ -92,6 +98,8 @@ logFile = pd.read_excel(path, sheet_name="all")
 for index, row in logFile.iterrows():
     if row["PROCESSED"] == "YES":
         continue
+    if row["SETUP"] != "PRESS":
+        continue
     try:
         m = makeROOTfile(
             rawDirectory=row["RAW-FOLDER"],
@@ -101,3 +109,7 @@ for index, row in logFile.iterrows():
         print(f"Error on file {row['RAW-FOLDER']}")
         continue
 
+# m = makeROOTfile(
+#             rawDirectory="/eos/user/j/jcapotor/FBGdata/Data/camara_climatica/202305MayRuns/20230505",
+#         )
+# m.make()

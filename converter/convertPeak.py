@@ -91,11 +91,18 @@ class PeakConverter():
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
             outputTree = ROOT.TTree(self.treeNames[0], "Peaks fitted by I4G")
 
-            t = np.array([0.0 for _ in range(self.nPols)])
-            wav = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols))
-            sweep = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
-            ch = np.array([0.0 for _ in range(self.nSensors)])
-            pos = np.array([0.0 for _ in range(self.nSensors)])
+            # t = np.array([0.0 for _ in range(self.nPols)])
+            # wav = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols))
+            # sweep = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
+            # ch = np.array([0.0 for _ in range(self.nSensors)])
+            # pos = np.array([0.0 for _ in range(self.nSensors)])
+
+            t = np.zeros(self.nPols, dtype=np.float64)
+            wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+            sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+            ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+            pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
             outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
@@ -111,17 +118,31 @@ class PeakConverter():
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
 
-        t = np.array([0.0 for _ in range(self.nPols)])
-        wav = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        sweep = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        ch = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        pos = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        # t = np.array([0.0 for _ in range(self.nPols)])
+        # wav = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        # sweep = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        # ch = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        # pos = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+
+        t = np.zeros(self.nPols, dtype=np.float64)
+        wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+        sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+        ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+        pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+
 
         outputTree.SetBranchAddress("t", t)
         outputTree.SetBranchAddress("wav", wav)
         outputTree.SetBranchAddress("sweep", sweep)
         outputTree.SetBranchAddress("ch", ch)
         outputTree.SetBranchAddress("pos", pos)
+
+        # outputTree.Branch("t", t, f"t[{self.nPols}]/D")
+        # outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
+        # outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{self.nSensors}]/D")
+        # outputTree.Branch("ch", ch, f"ch[{self.nSensors}]/D")
+        # outputTree.Branch("pos", pos, f"pos[{self.nSensors}]/D")
+
 
         peakData = pd.read_csv(self.peakFileName, sep="\t", header=None, names=self.header,
                                chunksize=chunksize, on_bad_lines="warn")

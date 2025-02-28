@@ -2,3 +2,4 @@
 venv/
 pdvd/logs/
 *.ipynb
+*.pyc
