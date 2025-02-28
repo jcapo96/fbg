@@ -48,14 +48,14 @@ class makeROOTfile():
             print(fileName)
             if "LOG" in fileName.upper():
                 continue
-            if "spectrumf" in fileName:
+            if "spectrum" in fileName:
                 try:
                     print(f"\n ******* Using Spectrum Converter ******* \n")
                     spectrum = SpectrumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     spectrum.fillRootFile()
                 except:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
-            if "peakf" in fileName:
+            if "peak" in fileName:
                 try:
                     print("\n ******* Using Peak Converter *******")
                     peak = PeakConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
