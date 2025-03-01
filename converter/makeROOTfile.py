@@ -98,8 +98,6 @@ logFile = pd.read_excel(path, sheet_name="all")
 for index, row in logFile.iterrows():
     if row["PROCESSED"] == "YES":
         continue
-    if row["SETUP"] != "PRESS":
-        continue
     try:
         m = makeROOTfile(
             rawDirectory=row["RAW-FOLDER"],

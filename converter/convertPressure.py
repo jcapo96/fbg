@@ -17,7 +17,6 @@ class PressureConverter():
         self.dataTypes = []
         self.df = pd.read_csv(self.pressFilename, sep=",", header=None, names=self.header)
         # Combine "Date" and "Time" columns into a single datetime column
-        print(self.df)
         self.df["Datetime"] = pd.to_datetime(self.df["Datetime"], format='%Y-%m-%d %H:%M:%S')
         # Convert datetime to epoch time
         self.df["epochTime"] = self.df["Datetime"].astype(int) * 10**-9  # Convert nanoseconds to seconds

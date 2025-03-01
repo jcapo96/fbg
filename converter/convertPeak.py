@@ -7,7 +7,11 @@ import numpy as np
 import subprocess
 
 def reshapeEpochTime(timestamp):
-    return (datetime.utcfromtimestamp(timestamp*10**-9) - timedelta(days=70*365+17)).timestamp()
+    dt = datetime.utcfromtimestamp(timestamp * 10**-9)
+    today = datetime.utcnow()
+    if dt > today:
+        dt -= timedelta(days=70*365+17)
+    return dt.timestamp()
 
 class PeakConverter():
     def __init__(self, peakFileName, outputRootFileName):
@@ -100,8 +104,8 @@ class PeakConverter():
             t = np.zeros(self.nPols, dtype=np.float64)
             wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
             sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-            ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
-            pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+            ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+            pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
 
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
@@ -127,8 +131,8 @@ class PeakConverter():
         t = np.zeros(self.nPols, dtype=np.float64)
         wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
         sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-        ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
-        pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)  # ✅ 2D array
+        ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+        pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
 
 
         outputTree.SetBranchAddress("t", t)

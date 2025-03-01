@@ -27,7 +27,7 @@ class RTDConverter():
         try:
             self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"], format='%d/%m/%Y %H:%M:%S')
         except:
-            self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"], format='%m/%d/%Y %H:%M:%S %p')
+            self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"], format='%m/%d/%Y %I:%M:%S %p')
         # Convert datetime to epoch time
         self.df["epochTime"] = self.df["Datetime"].astype(int) * 10**-9  # Convert nanoseconds to seconds
         # Drop the original "Date", "Time", and "Datetime" columns

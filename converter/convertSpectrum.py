@@ -112,7 +112,8 @@ class SpectrumConverter():
                         finalWL[0] = np.fromfile(fileId, dtype='<d', count=1)[0]
                         nPoints[0] = np.fromfile(fileId, dtype='<i4', count=1)[0]
                         dataIni = np.fromfile(fileId, dtype='<i2', count=nPoints[0])
-                        timeStamp[1] = (datetime.utcfromtimestamp(timeStamp[1]) - timedelta(days=70*365+17)).timestamp()
+                        if datetime.utcfromtimestamp(timeStamp[1]) > datetime.utcnow():
+                            timeStamp[1] = (datetime.utcfromtimestamp(timeStamp[1]) - timedelta(days=70*365+17)).timestamp()
                         channelsRead.append(channelN[0])
                         if channelN[0] not in self.channels:
                             continue
@@ -131,7 +132,8 @@ class SpectrumConverter():
                         finalWL[0] = np.fromfile(fileId, dtype='<d', count=1)[0]
                         nPoints[0] = np.fromfile(fileId, dtype='<i4', count=1)[0]
                         dataIni = np.fromfile(fileId, dtype='<i2', count=nPoints[0])
-                        timeStamp[0] = (datetime.utcfromtimestamp(timeStamp[0]) - timedelta(days=70*365+17)).timestamp()
+                        if datetime.utcfromtimestamp(timeStamp[0]) > datetime.utcnow():
+                            timeStamp[0] = (datetime.utcfromtimestamp(timeStamp[0]) - timedelta(days=70*365+17)).timestamp()
                         channelsRead.append(channelN[0])
                         if channelN[0] not in self.channels:
                             continue
