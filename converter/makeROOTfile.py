@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import pandas as pd
 
 current_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -53,43 +54,55 @@ class makeROOTfile():
                     print(f"\n ******* Using Spectrum Converter ******* \n")
                     spectrum = SpectrumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     spectrum.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
             if "peak" in fileName:
                 try:
                     print("\n ******* Using Peak Converter *******")
                     peak = PeakConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     peak.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
             if "temperature" in fileName:
                 try:
                     print("\n ******* Using RTD Converter *******")
                     temp = RTDConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     temp.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
             if "humidity" in fileName:
                 try:
                     print("\n ******* Using Humidity Converter *******")
                     hum = HumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     hum.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
             if "CLIMATIC" in fileName.upper():
                 try:
                     print("\n ******* Using Climatic Chamber Converter *******")
                     climatic = climaticChamberConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     climatic.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
             if "pressure" in fileName:
                 try:
                     print("\n ******* Using Pressure Converter *******")
                     press = PressureConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
                     press.fillRootFile()
-                except:
+                except Exception as e:
                     print(f"\n Not able to process file: {self.rawDirectory}/{fileName} \n")
+                    print(f"Error: {e}")
+                    raise  # Re-raise exception to propagate the error
 
 
 path = "/eos/user/j/jcapotor/FBGdata/MAPPING/LogFile.xlsx"
@@ -105,6 +118,7 @@ for index, row in logFile.iterrows():
         m.make()
     except Exception as e:
         print(f"Error on file {row['RAW-FOLDER']}")
+        print(f"Error details: {e}")
         continue
 
 # m = makeROOTfile(
