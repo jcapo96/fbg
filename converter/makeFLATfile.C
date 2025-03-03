@@ -20,7 +20,7 @@ void makeFLATfile(const char* input_filename, const char* output_filename) {
     // Create a new ROOT output file where the resampled trees will be saved
     TFile *output_file = new TFile(output_filename, "RECREATE");
     if (!output_file || output_file->IsZombie()) {
-        std::cerr << "Error: Cannot create output file " << output_filename << std::endl;
+        std::cerr << "Error: Cannot creffate output file " << output_filename << std::endl;
         file->Close();
         return;
     }
