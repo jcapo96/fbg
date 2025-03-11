@@ -1,7 +1,7 @@
 import os, csv
 import pandas as pd
 import ROOT
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
 import numpy as np
 import subprocess
@@ -12,6 +12,11 @@ def reshapeEpochTime(timestamp):
     if dt > today:
         dt -= timedelta(days=66*365 + 30*9 + 11, hours=6)
     return dt.timestamp()
+
+def convertTimeStamp(datetime_str, format="%d-%b-%Y %H:%M:%S.%f"):
+    """Convert a datetime string to a Unix timestamp in nanoseconds."""
+    dt = datetime.strptime(datetime_str, format)
+    return dt.timestamp() * 1e9
 
 class PeakConverter():
     def __init__(self, peakFileName, outputRootFileName):
@@ -102,6 +107,7 @@ class PeakConverter():
             # pos = np.array([0.0 for _ in range(self.nSensors)])
 
             t = np.zeros(self.nPols, dtype=np.float64)
+            t_from_epochtime = np.zeros(self.nPols, dtype=np.float64)
             wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
             sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
             ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
@@ -109,6 +115,7 @@ class PeakConverter():
 
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
+            outputTree.Branch("t_from_epochtime", t_from_epochtime, f"t_from_epochtime[{self.nPols}]/D")
             outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
             outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{self.nSensors}]/D")
             outputTree.Branch("ch", ch, f"ch[{self.nSensors}]/D")
@@ -129,6 +136,7 @@ class PeakConverter():
         # pos = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
 
         t = np.zeros(self.nPols, dtype=np.float64)
+        t_from_epochtime = np.zeros(self.nPols, dtype=np.float64)
         wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
         sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
         ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
@@ -136,6 +144,7 @@ class PeakConverter():
 
 
         outputTree.SetBranchAddress("t", t)
+        outputTree.SetBranchAddress("t_from_epochtime", t_from_epochtime)
         outputTree.SetBranchAddress("wav", wav)
         outputTree.SetBranchAddress("sweep", sweep)
         outputTree.SetBranchAddress("ch", ch)
@@ -158,12 +167,15 @@ class PeakConverter():
             with tqdm(total=line_count) as pbar:
                 for nChunk, chunk in enumerate(peakData):
                     chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
+                    chunk["timeStamp"] = chunk["timeStamp"].apply(convertTimeStamp)
                     for index, row in chunk.iterrows():
                         nSens = 0
                         for element in chunk.columns:
                             if (index%2 == True):
-                                if "epoch" in element:
+                                if "time" in element:
                                     t[1] = row[element]
+                                elif "epoch" in element:
+                                    t_from_epochtime[1] = row[element]
                                 elif "Wav" in element:
                                     wav[1][nSens] = row[element]
                                     ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
@@ -172,8 +184,10 @@ class PeakConverter():
                                     sweep[1][nSens] = row[element]
                                     nSens += 1
                             elif (index%2 == False):
-                                if "epoch" in element:
+                                if "time" in element:
                                     t[0] = row[element]
+                                elif "epoch" in element:
+                                    t_from_epochtime[0] = row[element]
                                 elif "Wav" in element:
                                     wav[0][nSens] = row[element]
                                     ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])

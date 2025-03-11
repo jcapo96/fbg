@@ -49,7 +49,7 @@ class makeROOTfile():
             print(fileName)
             if "LOG" in fileName.upper():
                 continue
-            if "spectrum" in fileName:
+            if "spectrumf" in fileName:
                 try:
                     print(f"\n ******* Using Spectrum Converter ******* \n")
                     spectrum = SpectrumConverter(f"{self.rawDirectory}/{fileName}", self.outputRootFileName)
