@@ -1,5 +1,6 @@
 import ROOT
 import numpy as np
+import datetime
 
 def resample_root_file(input_filename, output_filename, sampling_interval=5, default_value=-99999):
     """
@@ -14,9 +15,9 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
     output_file = ROOT.TFile(output_filename, "RECREATE")
     trees_to_resample = ['peak', 'temp', 'press']
     
-    # Step 1: Find the global initial time t0
-    t0 = float('inf')
-    max_t = float('-inf')
+    # Step 1: Find the adjusted initial and final times
+    t0 = float('inf')  # Maximum of initial times
+    max_t = float('-inf')  # Minimum of final times
     num_sensors = None
     num_polarizations = 2  # Always defined as 2
     
@@ -28,14 +29,15 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
             processed_trees.append(tree_name)
             tree.GetEntry(0)
             min_time = min(tree.t[0], tree.t[1]) if tree_name == 'peak' else tree.t
-            t0 = min(t0, min_time)
-            print(f"{tree_name} initial time: {min_time}")
+            t0 = min(t0, min_time)  # Use the minimum of initial times
             
             tree.GetEntry(tree.GetEntries() - 1)
             max_time = max(tree.t[0], tree.t[1]) if tree_name == 'peak' else tree.t
-            max_t = max(max_t, max_time)
-            print(f"{tree_name} final time: {max_time}")
+            max_t = max(max_t, max_time)  # Use the maximum of final times
             
+            print(f"{tree_name} initial time: {min_time} ({datetime.datetime.utcfromtimestamp(min_time)})")
+            print(f"{tree_name} final time: {max_time} ({datetime.datetime.utcfromtimestamp(max_time)})")
+
             if tree_name == 'peak':
                 if hasattr(tree, 'wav'):
                     num_sensors = len(tree.wav[0]) if len(tree.wav) > 0 else 1
@@ -49,8 +51,9 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
         print("Error: Could not determine wav dimensions.")
         return
 
-    print(f"Global initial time t0: {t0}")
-    print(f"Global final time max_t: {max_t}")
+    print(f"Adjusted global initial time t0: {t0} ({datetime.datetime.utcfromtimestamp(t0)})")
+    print(f"Adjusted global final time max_t: {max_t} ({datetime.datetime.utcfromtimestamp(max_t)})")
+
     bins = np.arange(t0, max_t + sampling_interval, sampling_interval)
     print(f"Number of intervals: {len(bins) - 1}")
     
@@ -83,33 +86,29 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
     
     # Step 3: Compute mean values ignoring default values
     for b in bins[:-1]:
+        if count_wav[b] == 0 and count_temp[b] == 0 and count_press[b] == 0:
+            start_time = datetime.datetime.utcfromtimestamp(b)
+            end_time = datetime.datetime.utcfromtimestamp(b + sampling_interval)
+            print(f"Interval {b}-{b+sampling_interval} ({start_time} - {end_time}) contains no valid data.")
+        
         if count_wav[b] > 0:
             wav_values = np.array(resampled_data[b]["wav"])
             wav_values = np.where(wav_values == default_value, np.nan, wav_values)
-            if np.all(np.isnan(wav_values)):
-                resampled_data[b]["wav"] = np.full((num_polarizations, num_sensors), default_value)
-            else:
-                resampled_data[b]["wav"] = np.nanmean(wav_values, axis=0)
+            resampled_data[b]["wav"] = np.nanmean(wav_values, axis=0) if not np.all(np.isnan(wav_values)) else np.full((num_polarizations, num_sensors), default_value)
         else:
             resampled_data[b]["wav"] = np.full((num_polarizations, num_sensors), default_value)
         
         if count_temp[b] > 0:
             temp_values = np.array(resampled_data[b]["temp"])
             temp_values = np.where(temp_values == default_value, np.nan, temp_values)
-            if np.all(np.isnan(temp_values)):
-                resampled_data[b]["temp"] = np.full(8, default_value)
-            else:
-                resampled_data[b]["temp"] = np.nanmean(temp_values, axis=0)
+            resampled_data[b]["temp"] = np.nanmean(temp_values, axis=0) if not np.all(np.isnan(temp_values)) else np.full(8, default_value)
         else:
             resampled_data[b]["temp"] = np.full(8, default_value)
         
         if count_press[b] > 0:
             press_values = np.array(resampled_data[b]["press"])
             press_values = np.where(press_values == default_value, np.nan, press_values)
-            if np.all(np.isnan(press_values)):
-                resampled_data[b]["press"] = default_value
-            else:
-                resampled_data[b]["press"] = np.nanmean(press_values)
+            resampled_data[b]["press"] = np.nanmean(press_values) if not np.all(np.isnan(press_values)) else default_value
         else:
             resampled_data[b]["press"] = default_value
     
@@ -126,7 +125,7 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
     resampled_tree.Branch("press", resampled_press, "press/D")
     
     for i, b in enumerate(bins[:-1]):
-        resampled_t[0] = b
+        resampled_t[0] = b + sampling_interval / 2  # Use center of interval
         resampled_wav[:] = resampled_data[b]["wav"]
         resampled_temp[:] = resampled_data[b]["temp"]
         resampled_press[0] = resampled_data[b]["press"]
@@ -137,4 +136,4 @@ def resample_root_file(input_filename, output_filename, sampling_interval=5, def
     file.Close()
     print(f"Resampling completed. Output file: {output_filename}")
 
-resample_root_file("/eos/user/j/jcapotor/FBGdata/ROOTFiles/pressure_setup/20241001.root", "/eos/user/j/jcapotor/FBGdata/ROOTFiles/pressure_setup/resampled20241001.root", sampling_interval=5, default_value=-99999)
+resample_root_file("/eos/user/j/jcapotor/FBGdata/ROOTFiles/pressure_setup/20250228.root", "/eos/user/j/jcapotor/FBGdata/ROOTFiles/pressure_setup/resampled20250228.root", sampling_interval=10, default_value=-9999)
