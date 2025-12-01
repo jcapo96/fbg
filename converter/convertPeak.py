@@ -80,14 +80,12 @@ class PeakConverter():
             else:
                 return False
 
-    def checkTreeCompatibility(self):
+    def getExistingTreeSensorCount(self):
         """
-        Check if existing peak tree structure is compatible with current file's sensor count.
-        Returns True if compatible or if tree doesn't exist yet.
-        Returns False if sensor count mismatch detected.
+        Get the number of sensors in existing tree, or None if tree doesn't exist.
         """
         if not self.checkFileExists():
-            return True
+            return None
         
         try:
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
@@ -95,7 +93,7 @@ class PeakConverter():
             
             if not tree:
                 outputFile.Close()
-                return True
+                return None
             
             # Get the wav branch to check dimensions
             wav_branch = tree.GetBranch("wav")
@@ -109,23 +107,53 @@ class PeakConverter():
                 match = re.search(r'\[(\d+)\]\[(\d+)\]', leaf_title)
                 if match:
                     existing_nSensors = int(match.group(2))
-                    is_compatible = (existing_nSensors == self.nSensors)
-                    
-                    if not is_compatible:
-                        print(f"\n⚠️  WARNING: Sensor count mismatch detected!")
-                        print(f"   Existing tree has {existing_nSensors} sensors")
-                        print(f"   Current file has {self.nSensors} sensors")
-                        print(f"   → Tree will be RECREATED to avoid data corruption\n")
-                    
                     outputFile.Close()
-                    return is_compatible
+                    return existing_nSensors
             
             outputFile.Close()
-            return True
+            return None
             
         except Exception as e:
-            print(f"Warning: Could not check tree compatibility: {e}")
-            return True
+            print(f"Warning: Could not check existing sensor count: {e}")
+            return None
+    
+    def checkTreeCompatibility(self):
+        """
+        Check if current file can be added to existing tree.
+        Strategy: Use max(existing, current) sensors and pad with zeros.
+        Returns: (is_compatible, max_sensors, needs_expansion)
+        """
+        existing_nSensors = self.getExistingTreeSensorCount()
+        
+        if existing_nSensors is None:
+            # No existing tree, use current file's sensor count
+            return (True, self.nSensors, False)
+        
+        if existing_nSensors == self.nSensors:
+            # Perfect match, no issues
+            return (True, self.nSensors, False)
+        
+        # Mismatch detected
+        if existing_nSensors > self.nSensors:
+            # Tree has MORE sensors than current file (e.g., tree=5, file=4)
+            # Solution: Pad current file with zeros for missing sensors
+            print(f"\n⚠️  Sensor count mismatch:")
+            print(f"   Existing tree: {existing_nSensors} sensors")
+            print(f"   Current file:  {self.nSensors} sensors")
+            print(f"   → Will pad file data with ZEROS for sensors {self.nSensors+1}-{existing_nSensors}")
+            return (True, existing_nSensors, False)
+        else:
+            # Tree has FEWER sensors than current file (e.g., tree=4, file=5)
+            # Solution: Need to recreate tree with more sensors and copy old data
+            print(f"\n❌ INCOMPATIBLE: Tree expansion needed but NOT SUPPORTED!")
+            print(f"   Existing tree: {existing_nSensors} sensors")
+            print(f"   Current file:  {self.nSensors} sensors")
+            print(f"\n💡 ROOT trees cannot be expanded after creation.")
+            print(f"   SOLUTION: Delete the ROOT file and reprocess ALL files in order:")
+            print(f"   1. rm {self.outputRootFileName}")
+            print(f"   2. Process peak files from LARGEST sensor count first")
+            print(f"   3. Files with fewer sensors will be padded with zeros automatically")
+            return (False, None, True)
 
     def fillRootFile(self, chunksize=1e6):
         if self.header is None:
@@ -137,55 +165,70 @@ class PeakConverter():
             outputFile.Close()
             print(f"Creating new file at: {self.outputRootFileName} \n")
         
-        # ✅ NEW: Check if tree structure is compatible with current sensor count
-        tree_compatible = self.checkTreeCompatibility()
+        # ✅ NEW: Check compatibility and determine sensor count to use
+        is_compatible, tree_nSensors, needs_expansion = self.checkTreeCompatibility()
         
-        if self.checkTreeExists() is False or not tree_compatible:
+        if not is_compatible:
+            print(f"\n{'='*70}")
+            print(f"Processing SKIPPED to protect existing data.")
+            print(f"{'='*70}\n")
+            return  # Exit without processing
+        
+        # Use tree_nSensors (max of existing and current) for array dimensions
+        # This allows padding with zeros for files with fewer sensors
+        use_nSensors = tree_nSensors
+        
+        if self.checkTreeExists() is False:
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile. \n")
+            print(f"Creating tree with {use_nSensors} sensor slots\n")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
             outputTree = ROOT.TTree(self.treeNames[0], "Peaks fitted by I4G")
 
             # t = np.array([0.0 for _ in range(self.nPols)])
-            # wav = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols))
-            # sweep = np.array([0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
-            # ch = np.array([0.0 for _ in range(self.nSensors)])
-            # pos = np.array([0.0 for _ in range(self.nSensors)])
+            # wav = np.array([0.0 for _ in range(use_nSensors)] for _ in range(self.nPols))
+            # sweep = np.array([0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
+            # ch = np.array([0.0 for _ in range(use_nSensors)])
+            # pos = np.array([0.0 for _ in range(use_nSensors)])
 
             t = np.zeros(self.nPols, dtype=np.float64)
-            wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-            sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+            wav = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
+            sweep = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
             # ✅ FIX: ch and pos should be 1D arrays, not 2D
-            ch = np.zeros(self.nSensors, dtype=np.float64)
-            pos = np.zeros(self.nSensors, dtype=np.float64)
+            ch = np.zeros(use_nSensors, dtype=np.float64)
+            pos = np.zeros(use_nSensors, dtype=np.float64)
 
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
-            outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
-            outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{self.nSensors}]/D")
-            outputTree.Branch("ch", ch, f"ch[{self.nSensors}]/D")
-            outputTree.Branch("pos", pos, f"pos[{self.nSensors}]/D")
+            outputTree.Branch("wav", wav, f"wav[{self.nPols}][{use_nSensors}]/D")
+            outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{use_nSensors}]/D")
+            outputTree.Branch("ch", ch, f"ch[{use_nSensors}]/D")
+            outputTree.Branch("pos", pos, f"pos[{use_nSensors}]/D")
 
             outputFile.cd()
             outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
             outputFile.Close()
 
         print(f"Start filling: '{self.outputRootFileName}' from file: '{self.peakFileName}'")
+        print(f"File has {self.nSensors} sensors, tree accommodates {use_nSensors} sensors")
+        if self.nSensors < use_nSensors:
+            print(f"→ Sensors {self.nSensors+1}-{use_nSensors} will be filled with ZEROS (not present in file)\n")
+        
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
 
         # t = np.array([0.0 for _ in range(self.nPols)])
-        # wav = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        # sweep = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        # ch = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
-        # pos = np.array([[0.0 for _ in range(self.nSensors)] for _ in range(self.nPols)])
+        # wav = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
+        # sweep = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
+        # ch = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
+        # pos = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
 
         t = np.zeros(self.nPols, dtype=np.float64)
-        wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-        sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+        wav = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
+        sweep = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
         # ✅ FIX: ch and pos should be 1D arrays, not 2D
-        ch = np.zeros(self.nSensors, dtype=np.float64)
-        pos = np.zeros(self.nSensors, dtype=np.float64)
+        ch = np.zeros(use_nSensors, dtype=np.float64)
+        pos = np.zeros(use_nSensors, dtype=np.float64)
 
 
         outputTree.SetBranchAddress("t", t)

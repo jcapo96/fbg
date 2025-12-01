@@ -1,20 +1,56 @@
-# Bug Fix: Sensor Mismatch in Peak Converter
+# Bug Fix: Catastrophic Data Loss in Peak Converter
+
+> **⚠️ CRITICAL FIX**: This patch prevents **complete data loss** when processing multiple peak files with variable sensor counts. If you have existing ROOT files, **they may be incomplete** and need reprocessing.
+
+## 📋 Executive Summary
+
+**Problem:** `convertPeak.py` was using `ROOT.TObject.kWriteDelete` to recreate trees when sensor counts changed. This **deleted ALL previous data** from the ROOT file, keeping only the last processed file's data.
+
+**Impact:** Hours or days of measurements reduced to minutes. Example: 6.5 hours of data → 1 hour remaining.
+
+**Solution:** Zero-padding strategy—use maximum sensor count across all files, pad missing sensors with zeros, refuse tree expansion with clear instructions.
+
+**Action Required:** 
+1. Delete existing ROOT files
+2. Process peak files in descending sensor order (most sensors first)
+3. Verify all time ranges are present in output
+
+---
 
 ## 🐛 Problem Description
 
-When processing multiple peak files with **different numbers of sensors**, the ROOT tree structure was not being updated, causing data corruption and sensor mixing.
+When processing multiple peak files with **different numbers of sensors**, the ROOT tree handling had **CRITICAL BUGS** that caused data loss and corruption.
 
-### Example Scenario:
-1. Process `peaks_1.txt` with **4 sensors** → Creates tree with `wav[2][4]`
-2. Process `peaks_2.txt` with **5 sensors** → Tries to fill 5 sensors into 4-sensor structure
-3. **Result**: Sensor 5 data gets mixed with Sensor 4, polarizations shift incorrectly
+### Critical Issues Found:
 
-## 🔍 Bugs Identified
+#### **Issue #1: Data Loss with `kWriteDelete`** (MOST SEVERE)
+**Example Scenario:**
+1. Process `peaks_1.txt` (11:00-12:00, **4 sensors**) → Creates tree with `wav[2][4]` ✅
+2. Process `peaks_2.txt` (16:00-17:00, **5 sensors**) → Detects mismatch
+3. **RECREATES tree with `kWriteDelete`** → ❌ **DELETES ALL peaks_1 data!**
+4. **Result**: Only peaks_2 data remains (1 hour instead of 6+ hours)
 
-### 1. **Missing Tree Compatibility Check**
+This caused **silent data loss** where users would see only the last file's data in the ROOT file.
+
+#### **Issue #2: Array Dimension Mismatch**
+When sensor counts changed, data would be written to wrong memory locations, causing sensor mixing and polarization shifts.
+
+## 🔍 Bugs Identified (Technical Details)
+
+### 1. **Data Loss via Tree Overwriting** (CRITICAL)
+- **Location**: `fillRootFile()` line ~170
+- **Issue**: Used `ROOT.TObject.kWriteDelete` which **deletes existing tree**
+- **Code**:
+  ```python
+  # ❌ DANGEROUS: Deletes all existing data!
+  outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
+  ```
+- **Effect**: When sensor count changed, ALL previous peak data was erased
+
+### 2. **Missing Tree Compatibility Check**
 - **Location**: `fillRootFile()` method (line ~143)
 - **Issue**: Code only checked if tree exists, not if it's compatible with current file
-- **Effect**: New files with different sensor counts would corrupt existing data
+- **Effect**: Would attempt to write incompatible data structures
 
 ### 2. **Incorrect Array Dimensions for `ch` and `pos`**
 - **Location**: Lines 158-159 and 186-187
@@ -33,40 +69,95 @@ When processing multiple peak files with **different numbers of sensors**, the R
 - **Issue**: Using `sweep[0][nSens]` instead of `sweep[1][nSens]` for second polarization
 - **Effect**: Second polarization sweep times written to first polarization array
 
-## ✅ Solution Implemented
+## ✅ Solution Implemented (Version 3 - Current)
 
-### 1. Added `checkTreeCompatibility()` Method
+### **Strategy: Zero-Padding with Maximum Sensor Count**
+
+ROOT trees cannot be resized after creation. Our solution:
+- **Always use maximum sensor count** across all peak files
+- **Pad missing sensors with zeros** for files with fewer sensors
+- **Protect existing data** by refusing tree expansion
+
+### 1. Added `getExistingTreeSensorCount()` Method
+```python
+def getExistingTreeSensorCount(self):
+    """
+    Get the number of sensors in existing tree, or None if tree doesn't exist.
+    """
+    # Reads existing tree dimensions from ROOT file
+    # Returns sensor count or None
+```
+
+### 2. Enhanced `checkTreeCompatibility()` Method
 ```python
 def checkTreeCompatibility(self):
     """
-    Check if existing peak tree structure is compatible with current file's sensor count.
-    Returns True if compatible or if tree doesn't exist yet.
-    Returns False if sensor count mismatch detected.
+    Check if current file can be added to existing tree.
+    Strategy: Use max(existing, current) sensors and pad with zeros.
+    Returns: (is_compatible, max_sensors, needs_expansion)
     """
-    # Reads existing tree dimensions from ROOT file
-    # Compares with current file's sensor count
-    # Returns False if mismatch detected
 ```
 
-**What it does**:
-- Reads the `wav` branch leaf description (e.g., `"wav[2][4]"`)
-- Extracts existing sensor count using regex
-- Compares with current file's `self.nSensors`
-- Prints clear warning if mismatch detected
+**Returns tuple with 3 values:**
+- `is_compatible`: Can file be processed?
+- `max_sensors`: Number of sensor slots to use (max of existing and current)
+- `needs_expansion`: Does tree need expansion? (not supported)
 
-### 2. Tree Recreation on Incompatibility
+**Scenarios:**
+
+| Case | Existing | Current | Action | Result |
+|------|----------|---------|--------|---------|
+| **First file** | None | 4 | Create tree[4] | ✅ Tree with 4 slots |
+| **Same count** | 4 | 4 | Use existing | ✅ Perfect match |
+| **Fewer sensors** | 5 | 4 | Pad with zeros | ✅ Slots 5 = 0 |
+| **More sensors** | 4 | 5 | ❌ REJECT | ⚠️ Need expansion |
+
+### 3. Automatic Zero-Padding
 ```python
-# ✅ NEW LOGIC
-tree_compatible = self.checkTreeCompatibility()
+use_nSensors = tree_nSensors  # Max of existing and current
 
-if self.checkTreeExists() is False or not tree_compatible:
-    # Recreate tree with correct dimensions
+# Create arrays with max size
+wav = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
+
+# File data fills first self.nSensors slots
+# Remaining slots stay as zeros (padding)
 ```
 
-**What it does**:
-- If sensor count changed → Recreates tree with new dimensions
-- Prevents data corruption from dimension mismatch
-- Logs warning message for user awareness
+**Example with 3 files:**
+
+```
+peaks_1.txt: 4 sensors (11:00-12:00)
+  → Creates tree[4]
+  → Data: [S1, S2, S3, S4]
+
+peaks_2.txt: 4 sensors (13:00-14:00)
+  → Uses tree[4]
+  → Data: [S1, S2, S3, S4]
+
+peaks_3.txt: 5 sensors (16:00-17:00)
+  → ❌ REJECTED! Tree cannot expand from [4] to [5]
+  → Message: "Delete ROOT file and reprocess with largest sensor count first"
+```
+
+**Correct order:**
+
+```
+rm output.root  # Start fresh
+
+peaks_3.txt: 5 sensors (16:00-17:00)
+  → Creates tree[5]
+  → Data: [S1, S2, S3, S4, S5]
+
+peaks_1.txt: 4 sensors (11:00-12:00)
+  → Uses tree[5]
+  → Data: [S1, S2, S3, S4, 0]  ← S5 padded with zeros
+
+peaks_2.txt: 4 sensors (13:00-14:00)
+  → Uses tree[5]
+  → Data: [S1, S2, S3, S4, 0]  ← S5 padded with zeros
+```
+
+**Result:** All data preserved! Sensor 5 has valid data only during 16:00-17:00.
 
 ### 3. Fixed Array Dimensions
 ```python
@@ -89,59 +180,124 @@ elif "Ptime" in element:
 
 ## 🧪 Testing Recommendations
 
-### Test Case 1: Variable Sensor Count
-```bash
-# Process files with different sensor counts
-python makeROOTfile.py /path/to/data/with/peaks_4sensors/
-python makeROOTfile.py /path/to/data/with/peaks_5sensors/
+### ⚠️ CRITICAL: Process Files in Descending Sensor Order
 
-# Expected: Warning message + tree recreation
-# ⚠️  WARNING: Sensor count mismatch detected!
-#    Existing tree has 4 sensors
-#    Current file has 5 sensors
-#    → Tree will be RECREATED to avoid data corruption
+**Always process files with MOST sensors first:**
+
+```bash
+# ❌ BAD ORDER (will fail)
+peaks_1.txt: 4 sensors → creates tree[4]
+peaks_2.txt: 5 sensors → ❌ ERROR! Cannot expand tree[4] → tree[5]
+
+# ✅ CORRECT ORDER
+peaks_2.txt: 5 sensors → creates tree[5]
+peaks_1.txt: 4 sensors → pads S5 with zeros ✅
+```
+
+### Test Case 1: Variable Sensor Count (Correct Order)
+```bash
+# Create 3 peak files with different sensor counts
+peaks_1.txt: 4 sensors (11:00-12:00)
+peaks_2.txt: 5 sensors (13:00-14:00)
+peaks_3.txt: 4 sensors (15:00-16:00)
+
+# Delete existing ROOT file (if any)
+rm output.root
+
+# Process LARGEST file first
+python3 makeROOTfile.py peaks_2.txt  # Creates tree[5]
+python3 makeROOTfile.py peaks_1.txt  # Pads to [5]
+python3 makeROOTfile.py peaks_3.txt  # Pads to [5]
+
+# Expected result: ✅ All data preserved, S5 has zeros for peaks_1 and peaks_3
 ```
 
 ### Test Case 2: Verify Data Integrity
 ```python
 import uproot
-import numpy as np
+import pandas as pd
 
 # Open ROOT file
-file = uproot.open("output.root")
-tree = file["peak"]
-data = tree.arrays(library="np")
+f = uproot.open("output.root")
+tree = f["peak"]
 
-# Check dimensions
-print(f"wav shape: {data['wav'].shape}")      # Should be (n_entries, 2, n_sensors)
-print(f"ch shape: {data['ch'].shape}")        # Should be (n_entries, n_sensors)
-print(f"pos shape: {data['pos'].shape}")      # Should be (n_entries, n_sensors)
+# Check structure
+print(tree["wav"].typename)  # Should show float[2][5] (2 pols, 5 sensors)
 
-# Verify no mixing: check that ch values are consistent
-print(f"Channel values: {np.unique(data['ch'])}")
+# Verify data
+data = tree.arrays(library="pd")
+
+# Check all time ranges present
+print("Time coverage per date:")
+print(data.groupby("Date")["Time"].agg(['min', 'max', 'count']))
+# Should show ALL time ranges from all 3 files
+
+# Verify sensor 5 padding
+print("\nSensor 5 check:")
+print("Non-zero entries:", (data["wav"][:, 1, 4] != 0).sum())  # Only peaks_2 data
+print("Zero entries:", (data["wav"][:, 1, 4] == 0).sum())      # peaks_1 + peaks_3 data
+```
+
+### Test Case 3: Wrong Order Detection
+```bash
+# Delete existing ROOT file
+rm output.root
+
+# Process SMALLEST file first (will cause error later)
+python3 makeROOTfile.py peaks_1.txt  # Creates tree[4]
+python3 makeROOTfile.py peaks_2.txt  # ❌ ERROR! 
+# Expected error message:
+# "⚠️  INCOMPATIBLE: Tree has 4 sensors but file has 5 sensors."
+# "Tree cannot be expanded after creation."
+# "Delete output.root and reprocess with largest sensor count first."
 ```
 
 ## 📊 Impact
 
-### Before Fix:
-- ❌ Sensor 5 data mixed with Sensor 4
-- ❌ Polarization 2 data shifted to next sensor
-- ❌ Silent data corruption
-- ❌ Difficult to debug during analysis
+### Before Fix (CATASTROPHIC):
+- ❌ **DATA LOSS**: Only last file's data kept (6 hours reduced to 1 hour!)
+- ❌ `TObject.kWriteDelete` silently erased all previous entries
+- ❌ Sensor 5 data mixed with Sensor 4 (dimension mismatch)
+- ❌ Polarization 2 data shifted to next sensor (indexing bug)
+- ❌ Silent corruption—impossible to detect during conversion
 
-### After Fix:
-- ✅ Each sensor's data properly isolated
-- ✅ Polarizations correctly assigned
-- ✅ Clear warnings when sensor count changes
-- ✅ Automatic tree recreation when needed
+**Real Example from ROOT_DEWAR_28_11.ipynb:**
+```python
+# Expected: 11:00 - 17:30 (6.5 hours of data)
+# Actual:   16:27 - 17:32 (1 hour of data)
+# Lost:     5.5 hours of measurements!
+```
+
+### After Fix (SAFE):
+- ✅ **ALL DATA PRESERVED**: Zero-padding maintains complete time coverage
+- ✅ Each sensor's data properly isolated in correct dimension
+- ✅ Polarizations correctly assigned (sweep[1] for pol2)
+- ✅ Clear error messages when tree expansion needed
+- ✅ Processing order guidance (largest sensor count first)
 
 ## 🚀 Usage
 
-No changes needed in user code. The converter now automatically:
-1. Detects sensor count changes
-2. Warns the user
-3. Recreates the tree structure with correct dimensions
-4. Continues processing without data corruption
+### Critical Workflow Change
+
+**YOU MUST process files in descending sensor order:**
+
+```bash
+# Step 1: Check sensor counts in your data
+grep "^[0-9]" peaks_*.txt | head -1 | awk '{print NF-2}' 
+
+# Step 2: Delete existing ROOT file
+rm output.root
+
+# Step 3: Process files with MOST sensors FIRST
+python3 makeROOTfile.py peaks_5sensors.txt  # Creates tree[5]
+python3 makeROOTfile.py peaks_4sensors.txt  # Pads to tree[5]
+```
+
+### What the Converter Does Automatically:
+1. Detects existing tree sensor count
+2. Compares with current file sensor count
+3. If current ≥ existing: Pads with zeros ✅
+4. If current < existing: **REJECTS FILE** with clear instructions ❌
 
 ## � Future Work: Similar Fixes for Other Converters
 
