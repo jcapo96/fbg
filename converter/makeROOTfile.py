@@ -45,6 +45,31 @@ class makeROOTfile():
                 print(f"File '{self.outputRootFileName}' does not exist.")
             print("****************************************************")
 
+        # Sort peak files by sensor count (descending) to avoid tree expansion errors
+        peakFiles = [f for f in self.fileNames if "peak" in f]
+        otherFiles = [f for f in self.fileNames if "peak" not in f]
+        
+        if peakFiles:
+            print("\n🔍 Detecting sensor counts in peak files...")
+            peakFilesWithCounts = []
+            for fileName in peakFiles:
+                fullPath = f"{self.rawDirectory}/{fileName}"
+                sensorCount = PeakConverter.getSensorCount(fullPath)
+                peakFilesWithCounts.append((fileName, sensorCount))
+                print(f"   {fileName}: {sensorCount} sensors")
+            
+            # Sort by sensor count (descending - largest first)
+            peakFilesWithCounts.sort(key=lambda x: x[1], reverse=True)
+            sortedPeakFiles = [f[0] for f in peakFilesWithCounts]
+            
+            print(f"\n✅ Processing order (largest sensor count first):")
+            for i, (fileName, count) in enumerate(peakFilesWithCounts, 1):
+                print(f"   {i}. {fileName} ({count} sensors)")
+            print("****************************************************\n")
+            
+            # Combine: sorted peaks first, then other files
+            self.fileNames = sortedPeakFiles + otherFiles
+        
         for fileName in self.fileNames:
             print(fileName)
             if "LOG" in fileName.upper():

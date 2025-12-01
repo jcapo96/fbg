@@ -8,11 +8,13 @@
 
 **Impact:** Hours or days of measurements reduced to minutes. Example: 6.5 hours of data → 1 hour remaining.
 
-**Solution:** Zero-padding strategy—use maximum sensor count across all files, pad missing sensors with zeros, refuse tree expansion with clear instructions.
+**Solution:** 
+1. Zero-padding strategy—use maximum sensor count across all files, pad missing sensors with zeros
+2. **Automatic sorting** in `makeROOTfile.py`—peak files are automatically processed in descending sensor order
 
 **Action Required:** 
-1. Delete existing ROOT files
-2. Process peak files in descending sensor order (most sensors first)
+1. Delete existing ROOT files and reprocess
+2. No manual sorting needed—converter handles it automatically ✅
 3. Verify all time ranges are present in output
 
 ---
@@ -159,7 +161,36 @@ peaks_2.txt: 4 sensors (13:00-14:00)
 
 **Result:** All data preserved! Sensor 5 has valid data only during 16:00-17:00.
 
-### 3. Fixed Array Dimensions
+### 3. Automatic File Sorting in `makeROOTfile.py`
+
+Added logic to automatically detect and sort peak files by sensor count:
+
+```python
+# Sort peak files by sensor count (descending) to avoid tree expansion errors
+peakFiles = [f for f in self.fileNames if "peak" in f]
+
+if peakFiles:
+    print("\n🔍 Detecting sensor counts in peak files...")
+    peakFilesWithCounts = []
+    for fileName in peakFiles:
+        fullPath = f"{self.rawDirectory}/{fileName}"
+        sensorCount = PeakConverter.getSensorCount(fullPath)  # Static method
+        peakFilesWithCounts.append((fileName, sensorCount))
+    
+    # Sort by sensor count (descending - largest first)
+    peakFilesWithCounts.sort(key=lambda x: x[1], reverse=True)
+    
+    # Process sorted peaks first, then other files
+    self.fileNames = sortedPeakFiles + otherFiles
+```
+
+**Benefits:**
+- ✅ No manual sorting required by user
+- ✅ Guaranteed correct processing order
+- ✅ Clear console output showing detection and order
+- ✅ Works seamlessly with existing workflow
+
+### 4. Fixed Array Dimensions
 ```python
 # ✅ AFTER (CORRECT)
 ch = np.zeros(self.nSensors, dtype=np.float64)      # 1D array
@@ -180,36 +211,50 @@ elif "Ptime" in element:
 
 ## 🧪 Testing Recommendations
 
-### ⚠️ CRITICAL: Process Files in Descending Sensor Order
+### ✅ Automatic Sensor Order Handling
 
-**Always process files with MOST sensors first:**
+**The converter NOW sorts files automatically - no manual work needed!**
+
+Example output when processing a directory with mixed sensor counts:
 
 ```bash
-# ❌ BAD ORDER (will fail)
-peaks_1.txt: 4 sensors → creates tree[4]
-peaks_2.txt: 5 sensors → ❌ ERROR! Cannot expand tree[4] → tree[5]
+$ python3 makeROOTfile.py /path/to/data/
 
-# ✅ CORRECT ORDER
-peaks_2.txt: 5 sensors → creates tree[5]
-peaks_1.txt: 4 sensors → pads S5 with zeros ✅
+🔍 Detecting sensor counts in peak files...
+   peaks_1.txt: 4 sensors
+   peaks_2.txt: 5 sensors
+   peaks_3.txt: 4 sensors
+
+✅ Processing order (largest sensor count first):
+   1. peaks_2.txt (5 sensors)
+   2. peaks_1.txt (4 sensors)
+   3. peaks_3.txt (4 sensors)
+
+******* Using Peak Converter *******
+📊 Creating tree with 5 sensors...
+
+******* Using Peak Converter *******
+📊 Using existing tree with 5 sensors
+ℹ️  File has 4 sensors, padding sensor 5 with zeros
+
+******* Using Peak Converter *******
+📊 Using existing tree with 5 sensors
+ℹ️  File has 4 sensors, padding sensor 5 with zeros
 ```
 
-### Test Case 1: Variable Sensor Count (Correct Order)
+### Test Case 1: Automatic Sorting
 ```bash
-# Create 3 peak files with different sensor counts
-peaks_1.txt: 4 sensors (11:00-12:00)
-peaks_2.txt: 5 sensors (13:00-14:00)
-peaks_3.txt: 4 sensors (15:00-16:00)
+# Just place your peak files in a directory - any order is fine!
+/path/to/data/
+  ├── peaks_1.txt (4 sensors, 11:00-12:00)
+  ├── peaks_2.txt (5 sensors, 13:00-14:00)
+  └── peaks_3.txt (4 sensors, 15:00-16:00)
 
-# Delete existing ROOT file (if any)
-rm output.root
+# Run the converter normally
+python3 makeROOTfile.py /path/to/data/
 
-# Process LARGEST file first
-python3 makeROOTfile.py peaks_2.txt  # Creates tree[5]
-python3 makeROOTfile.py peaks_1.txt  # Pads to [5]
-python3 makeROOTfile.py peaks_3.txt  # Pads to [5]
-
-# Expected result: ✅ All data preserved, S5 has zeros for peaks_1 and peaks_3
+# Expected result: ✅ Automatic sorting → All data preserved
+# S5 will have zeros for peaks_1 and peaks_3, real data for peaks_2
 ```
 
 ### Test Case 2: Verify Data Integrity
@@ -238,18 +283,22 @@ print("Non-zero entries:", (data["wav"][:, 1, 4] != 0).sum())  # Only peaks_2 da
 print("Zero entries:", (data["wav"][:, 1, 4] == 0).sum())      # peaks_1 + peaks_3 data
 ```
 
-### Test Case 3: Wrong Order Detection
-```bash
-# Delete existing ROOT file
-rm output.root
+### Test Case 3: Edge Case - Manual Single File Processing
 
-# Process SMALLEST file first (will cause error later)
-python3 makeROOTfile.py peaks_1.txt  # Creates tree[4]
-python3 makeROOTfile.py peaks_2.txt  # ❌ ERROR! 
-# Expected error message:
+If you process files individually (not recommended), wrong order will be detected:
+
+```bash
+# ❌ EDGE CASE: Processing single files manually
+python3 -c "from convertPeak import PeakConverter; p = PeakConverter('peaks_1.txt', 'output.root'); p.fillRootFile()"  # Creates tree[4]
+python3 -c "from convertPeak import PeakConverter; p = PeakConverter('peaks_2.txt', 'output.root'); p.fillRootFile()"  # ❌ ERROR!
+
+# Expected error:
 # "⚠️  INCOMPATIBLE: Tree has 4 sensors but file has 5 sensors."
 # "Tree cannot be expanded after creation."
-# "Delete output.root and reprocess with largest sensor count first."
+# "Delete output.root and use makeROOTfile.py for automatic sorting."
+
+# ✅ SOLUTION: Use makeROOTfile.py instead (handles sorting automatically)
+python3 makeROOTfile.py /path/to/data/
 ```
 
 ## 📊 Impact
@@ -277,27 +326,52 @@ python3 makeROOTfile.py peaks_2.txt  # ❌ ERROR!
 
 ## 🚀 Usage
 
-### Critical Workflow Change
+### ✅ No Manual Work Required!
 
-**YOU MUST process files in descending sensor order:**
+**The converter NOW automatically handles everything:**
 
 ```bash
-# Step 1: Check sensor counts in your data
-grep "^[0-9]" peaks_*.txt | head -1 | awk '{print NF-2}' 
-
-# Step 2: Delete existing ROOT file
-rm output.root
-
-# Step 3: Process files with MOST sensors FIRST
-python3 makeROOTfile.py peaks_5sensors.txt  # Creates tree[5]
-python3 makeROOTfile.py peaks_4sensors.txt  # Pads to tree[5]
+# Just run the normal command - no sorting needed!
+python3 makeROOTfile.py /path/to/data/directory/
 ```
 
-### What the Converter Does Automatically:
-1. Detects existing tree sensor count
-2. Compares with current file sensor count
-3. If current ≥ existing: Pads with zeros ✅
-4. If current < existing: **REJECTS FILE** with clear instructions ❌
+**What happens automatically:**
+
+1. 🔍 **Auto-detection**: Scans all peak files and counts sensors
+   ```
+   🔍 Detecting sensor counts in peak files...
+      peaks_1.txt: 4 sensors
+      peaks_2.txt: 5 sensors
+      peaks_3.txt: 4 sensors
+   ```
+
+2. 📊 **Auto-sorting**: Reorders files by sensor count (descending)
+   ```
+   ✅ Processing order (largest sensor count first):
+      1. peaks_2.txt (5 sensors)
+      2. peaks_1.txt (4 sensors)
+      3. peaks_3.txt (4 sensors)
+   ```
+
+3. 🔧 **Auto-padding**: Files with fewer sensors get padded with zeros
+   ```
+   peaks_2.txt → Creates tree[5]
+   peaks_1.txt → Pads S5 = 0
+   peaks_3.txt → Pads S5 = 0
+   ```
+
+### What Each Component Does:
+
+**`makeROOTfile.py`:**
+- Automatically sorts peak files by sensor count before processing
+- Uses `PeakConverter.getSensorCount()` to detect sensor count from first line
+- Processes largest files first to avoid tree expansion errors
+
+**`convertPeak.py`:**
+- Detects existing tree sensor count from ROOT file
+- Compares with current file sensor count
+- If current ≤ existing: Pads with zeros ✅
+- If current > existing: **REJECTS FILE** with error (should never happen with auto-sorting) ❌
 
 ## � Future Work: Similar Fixes for Other Converters
 

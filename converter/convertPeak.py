@@ -22,6 +22,29 @@ class PeakConverter():
         self.treeNames          = ["peak"]
         self.nPols              = 2
 
+    @staticmethod
+    def getSensorCount(peakFileName):
+        """
+        Quickly detect the number of sensors in a peak file by reading only the first line.
+        Used for sorting peak files by sensor count before processing.
+        
+        Args:
+            peakFileName: Full path to the peak file
+            
+        Returns:
+            int: Number of sensors in the file
+        """
+        try:
+            with open(peakFileName, "r") as csvFile:
+                csvReader = csv.reader(csvFile)
+                firstLine = next(csvReader)[0].split("\t")
+            nSensors = int((len(firstLine) - 4) / 6)
+            return nSensors
+        except Exception as e:
+            print(f"⚠️  Warning: Could not detect sensor count for {peakFileName}")
+            print(f"   Error: {e}")
+            return 0  # Return 0 so file is processed last
+
     def createHeader(self):
         self.header = ["timeStamp", "epochTime", "errorFlag0", "sweepNumber"]
         self.dataTypes = ["u", "d", "d", "d"]
