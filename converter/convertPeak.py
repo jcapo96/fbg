@@ -80,6 +80,53 @@ class PeakConverter():
             else:
                 return False
 
+    def checkTreeCompatibility(self):
+        """
+        Check if existing peak tree structure is compatible with current file's sensor count.
+        Returns True if compatible or if tree doesn't exist yet.
+        Returns False if sensor count mismatch detected.
+        """
+        if not self.checkFileExists():
+            return True
+        
+        try:
+            outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
+            tree = outputFile.Get(self.treeNames[0])
+            
+            if not tree:
+                outputFile.Close()
+                return True
+            
+            # Get the wav branch to check dimensions
+            wav_branch = tree.GetBranch("wav")
+            if wav_branch:
+                # Get leaf title which contains dimensions like "wav[2][4]"
+                leaf = wav_branch.GetLeaf("wav")
+                leaf_title = leaf.GetTitle()
+                
+                # Extract sensor count from leaf title
+                import re
+                match = re.search(r'\[(\d+)\]\[(\d+)\]', leaf_title)
+                if match:
+                    existing_nSensors = int(match.group(2))
+                    is_compatible = (existing_nSensors == self.nSensors)
+                    
+                    if not is_compatible:
+                        print(f"\n⚠️  WARNING: Sensor count mismatch detected!")
+                        print(f"   Existing tree has {existing_nSensors} sensors")
+                        print(f"   Current file has {self.nSensors} sensors")
+                        print(f"   → Tree will be RECREATED to avoid data corruption\n")
+                    
+                    outputFile.Close()
+                    return is_compatible
+            
+            outputFile.Close()
+            return True
+            
+        except Exception as e:
+            print(f"Warning: Could not check tree compatibility: {e}")
+            return True
+
     def fillRootFile(self, chunksize=1e6):
         if self.header is None:
             #Checks if the header is already created in the class, if not, it creates the header
@@ -89,7 +136,11 @@ class PeakConverter():
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "RECREATE")
             outputFile.Close()
             print(f"Creating new file at: {self.outputRootFileName} \n")
-        if self.checkTreeExists() is False:
+        
+        # ✅ NEW: Check if tree structure is compatible with current sensor count
+        tree_compatible = self.checkTreeCompatibility()
+        
+        if self.checkTreeExists() is False or not tree_compatible:
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile. \n")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
@@ -104,8 +155,9 @@ class PeakConverter():
             t = np.zeros(self.nPols, dtype=np.float64)
             wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
             sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-            ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-            pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+            # ✅ FIX: ch and pos should be 1D arrays, not 2D
+            ch = np.zeros(self.nSensors, dtype=np.float64)
+            pos = np.zeros(self.nSensors, dtype=np.float64)
 
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
@@ -131,8 +183,9 @@ class PeakConverter():
         t = np.zeros(self.nPols, dtype=np.float64)
         wav = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
         sweep = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-        ch = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
-        pos = np.zeros((self.nPols, self.nSensors), dtype=np.float64)
+        # ✅ FIX: ch and pos should be 1D arrays, not 2D
+        ch = np.zeros(self.nSensors, dtype=np.float64)
+        pos = np.zeros(self.nSensors, dtype=np.float64)
 
 
         outputTree.SetBranchAddress("t", t)
@@ -166,8 +219,9 @@ class PeakConverter():
                                     t[1] = row[element]
                                 elif "Wav" in element:
                                     wav[1][nSens] = row[element]
-                                    ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
-                                    pos[1][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                    # ✅ FIX: ch and pos are 1D, not 2D
+                                    ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                                    pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
                                 elif "Ptime" in element:
                                     sweep[1][nSens] = row[element]
                                     nSens += 1
@@ -176,8 +230,9 @@ class PeakConverter():
                                     t[0] = row[element]
                                 elif "Wav" in element:
                                     wav[0][nSens] = row[element]
-                                    ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
-                                    pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                    # ✅ FIX: ch and pos are 1D, not 2D
+                                    ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                                    pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
                                 elif "Ptime" in element:
                                     sweep[0][nSens] = row[element]
                                     nSens += 1
@@ -197,8 +252,9 @@ class PeakConverter():
                                 t[0] = row[element]
                             elif "Wav" in element:
                                 wav[0][nSens] = row[element]
-                                ch[0][nSens] = int(element.split("Wav")[1].split("_")[0])
-                                pos[0][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                # ✅ FIX: ch and pos are 1D, not 2D
+                                ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                                pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
                             elif "Ptime" in element:
                                 sweep[0][nSens] = row[element]
                                 nSens += 1
@@ -207,10 +263,12 @@ class PeakConverter():
                                 t[1] = row[element]
                             elif "Wav" in element:
                                 wav[1][nSens] = row[element]
-                                ch[1][nSens] = int(element.split("Wav")[1].split("_")[0])
-                                pos[1][nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                                # ✅ FIX: ch and pos are 1D, not 2D
+                                ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                                pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
                             elif "Ptime" in element:
-                                sweep[0][nSens] = row[element]
+                                # ✅ FIX: Should be sweep[1], not sweep[0]
+                                sweep[1][nSens] = row[element]
                                 nSens += 1
                     if index%2 == True:
                         outputTree.Fill()
