@@ -143,7 +143,228 @@ No changes needed in user code. The converter now automatically:
 3. Recreates the tree structure with correct dimensions
 4. Continues processing without data corruption
 
-## 📝 Git Branch
+## � Future Work: Similar Fixes for Other Converters
+
+### **convertSpectrum.py** - If you need to change the number of fiber channels
+
+**Current Status**: Hardcoded to 3 channels (line 14):
+```python
+self.channels = [0,1,2]  # Fixed: 3 fiber channels
+```
+
+**When to apply fix**: If you need to add/remove fiber channels between measurements
+
+**Steps to implement**:
+
+1. **Add dynamic channel detection**:
+```python
+def detectChannels(self):
+    """
+    Detect channels from spectrum file instead of hardcoding.
+    Read first few packets to determine which channels are present.
+    """
+    channels_found = set()
+    with open(self.spectrumFileName, 'rb') as f:
+        # Read first N packets to detect channels
+        for _ in range(100):  # Sample first 100 packets
+            try:
+                packetSize = np.fromfile(f, dtype='<i4', count=1)[0]
+                timeStamp = np.fromfile(f, dtype='<u8', count=1)[0]
+                validityFlag = np.fromfile(f, dtype='<i4', count=1)[0]
+                channelN = np.fromfile(f, dtype='<i4', count=1)[0]
+                channels_found.add(channelN)
+                # Skip rest of packet
+                f.seek(packetSize - 20, 1)
+            except:
+                break
+        f.seek(0)  # Reset to beginning
+    self.channels = sorted(list(channels_found))
+    return self
+```
+
+2. **Add checkTreeCompatibility() method** (similar to Peak converter):
+```python
+def checkTreeCompatibility(self):
+    """
+    Check if existing spectrum tree structure matches current file's channel count.
+    Returns True if compatible, False if channel count mismatch detected.
+    """
+    if not self.checkFileExists():
+        return True
+    
+    try:
+        outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
+        tree = outputFile.Get(self.treeNames[0])
+        
+        if not tree:
+            outputFile.Close()
+            return True
+        
+        wav_branch = tree.GetBranch("wav")
+        if wav_branch:
+            leaf = wav_branch.GetLeaf("wav")
+            leaf_title = leaf.GetTitle()
+            
+            # Extract channel count from "wav[2][N][39200]" format
+            import re
+            match = re.search(r'\[(\d+)\]\[(\d+)\]\[(\d+)\]', leaf_title)
+            if match:
+                existing_nChannels = int(match.group(2))
+                is_compatible = (existing_nChannels == len(self.channels))
+                
+                if not is_compatible:
+                    print(f"\n⚠️  WARNING: Channel count mismatch detected!")
+                    print(f"   Existing tree has {existing_nChannels} channels")
+                    print(f"   Current file has {len(self.channels)} channels")
+                    print(f"   → Tree will be RECREATED to avoid data corruption\n")
+                
+                outputFile.Close()
+                return is_compatible
+        
+        outputFile.Close()
+        return True
+        
+    except Exception as e:
+        print(f"Warning: Could not check tree compatibility: {e}")
+        return True
+```
+
+3. **Modify fillRootFile()** to use compatibility check:
+```python
+def fillRootFile(self):
+    # Add dynamic channel detection
+    self.detectChannels()
+    
+    if self.checkFileExists() is False:
+        outputFile = ROOT.TFile(f"{self.outputRootFileName}", "RECREATE")
+        outputFile.Close()
+        print(f"Creating new file at: {self.outputRootFileName} \n")
+    
+    # ✅ NEW: Check tree compatibility
+    tree_compatible = self.checkTreeCompatibility()
+    
+    if self.checkTreeExists() is False or not tree_compatible:
+        # Recreate tree with correct dimensions
+        ...
+```
+
+**Expected output when channel count changes**:
+```
+⚠️  WARNING: Channel count mismatch detected!
+   Existing tree has 3 channels
+   Current file has 4 channels
+   → Tree will be RECREATED to avoid data corruption
+```
+
+---
+
+### **convertRTD.py** - If you need to change the number of RTD sensors
+
+**Current Status**: Already detects `nSensors` dynamically (line 22):
+```python
+self.nSensors = len(firstLine) - 2  # ✅ Dynamic detection
+```
+
+**When to apply fix**: If you add/remove RTD sensors between measurements
+
+**Steps to implement** (very similar to Peak fix):
+
+1. **Add checkTreeCompatibility() method**:
+```python
+def checkTreeCompatibility(self):
+    """
+    Check if existing temp tree structure matches current file's sensor count.
+    Returns True if compatible, False if sensor count mismatch detected.
+    """
+    if not self.checkFileExists():
+        return True
+    
+    try:
+        outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
+        tree = outputFile.Get(self.treeNames[0])
+        
+        if not tree:
+            outputFile.Close()
+            return True
+        
+        temp_branch = tree.GetBranch("temp")
+        if temp_branch:
+            leaf = temp_branch.GetLeaf("temp")
+            leaf_title = leaf.GetTitle()
+            
+            # Extract sensor count from "temp[N]" format
+            import re
+            match = re.search(r'\[(\d+)\]', leaf_title)
+            if match:
+                existing_nSensors = int(match.group(1))
+                is_compatible = (existing_nSensors == self.nSensors)
+                
+                if not is_compatible:
+                    print(f"\n⚠️  WARNING: RTD sensor count mismatch detected!")
+                    print(f"   Existing tree has {existing_nSensors} sensors")
+                    print(f"   Current file has {self.nSensors} sensors")
+                    print(f"   → Tree will be RECREATED to avoid data corruption\n")
+                
+                outputFile.Close()
+                return is_compatible
+        
+        outputFile.Close()
+        return True
+        
+    except Exception as e:
+        print(f"Warning: Could not check tree compatibility: {e}")
+        return True
+```
+
+2. **Modify fillRootFile()** in line ~78:
+```python
+def fillRootFile(self, chunksize=None):
+    if self.header is None:
+        self.prepareData()
+    
+    if self.checkFileExists() is False:
+        outputFile = ROOT.TFile(f"{self.outputRootFileName}", "RECREATE")
+        outputFile.Close()
+        print(f"Creating new file at: {self.outputRootFileName}")
+    
+    # ✅ NEW: Check tree compatibility
+    tree_compatible = self.checkTreeCompatibility()
+    
+    if self.checkTreeExists() is False or not tree_compatible:
+        # Recreate tree with correct dimensions
+        ...
+```
+
+---
+
+### **convertPressure.py** - No changes expected
+
+**Status**: Single sensor (`self.nSensors = 1`), unlikely to change.
+
+**If needed**: Follow same pattern as RTD converter above.
+
+---
+
+### **convertHumidity.py** & **convertClimaticChamber.py** - No changes expected
+
+**Status**: Fixed sensor layouts, unlikely to change.
+
+---
+
+## 🎯 Summary Table
+
+| Converter | Dynamic Detection | Needs Fix If... | Priority |
+|-----------|-------------------|-----------------|----------|
+| **Peak** | ✅ Implemented | Add/remove FBG sensors | ✅ DONE |
+| **Spectrum** | ❌ Hardcoded (3 channels) | Add/remove fiber channels | 🔵 Future |
+| **RTD** | ✅ Already dynamic | Add/remove RTD sensors | 🟡 Future |
+| **Pressure** | N/A (single sensor) | N/A | - |
+| **Humidity** | N/A (fixed layout) | N/A | - |
+| **Climatic** | N/A (fixed layout) | N/A | - |
+
+---
+
+## �📝 Git Branch
 
 Branch: `fix/peak-sensor-mismatch`
 Commit: 048656cb
