@@ -10,7 +10,8 @@ class SpectrumConverter():
         self.outputRootFileName      = outputRootFileName #has to contain the full path
         self.treeNames = ["spectrum"]
         self.header = ["packetSize", "epochTime", "validityFlag", "channelN", "fibreN", "startWL", "endWL", "nPoints", "amplitude"]
-        self.channels = [0,1,2]
+        self.channels = []  # Will be detected dynamically from file (up to 16 channels)
+        self.channel_to_index = {}  # Mapping from physical channel number to array index
         self.nPols = 2
 
     def checkFileExists(self):
@@ -40,13 +41,116 @@ class SpectrumConverter():
             else:
                 return False
 
+    def detectChannels(self):
+        """
+        Detect which channels (0-15) contain valid data by sampling the spectrum file.
+        Only channels with actual data will be included in self.channels.
+        Creates a mapping from physical channel number to array index.
+        """
+        channels_found = set()
+        try:
+            with open(self.spectrumFileName, 'rb') as f:
+                # Read first 200 packets to detect all channels present
+                for _ in range(200):
+                    try:
+                        packetSize = np.fromfile(f, dtype='<i4', count=1)
+                        if len(packetSize) == 0:
+                            break
+                        packetSize = packetSize[0]
+                        
+                        timeStamp = np.fromfile(f, dtype='<u8', count=1)
+                        if len(timeStamp) == 0:
+                            break
+                        
+                        validityFlag = np.fromfile(f, dtype='<i4', count=1)
+                        if len(validityFlag) == 0:
+                            break
+                        
+                        channelN = np.fromfile(f, dtype='<i4', count=1)
+                        if len(channelN) == 0:
+                            break
+                        channelN = channelN[0]
+                        
+                        # Only accept valid channel numbers (0-15)
+                        if 0 <= channelN <= 15:
+                            channels_found.add(channelN)
+                        
+                        # Skip rest of packet to next one
+                        remaining = packetSize - 20  # 20 bytes already read
+                        f.seek(remaining, 1)
+                    except:
+                        break
+        except Exception as e:
+            print(f"Warning during channel detection: {e}")
+            if not channels_found:
+                print("No channels detected, defaulting to [0,1,2]")
+                channels_found = {0, 1, 2}
+        
+        self.channels = sorted(list(channels_found))
+        # Create mapping from physical channel number to array index
+        # e.g., if channels = [0, 3, 7], mapping = {0: 0, 3: 1, 7: 2}
+        self.channel_to_index = {ch: idx for idx, ch in enumerate(self.channels)}
+        print(f"Detected {len(self.channels)} active channels: {self.channels}")
+        return self
+
+    def checkTreeCompatibility(self):
+        """
+        Check if existing spectrum tree structure matches current file's channel count.
+        Returns True if compatible, False if channel count mismatch detected.
+        """
+        if not self.checkFileExists():
+            return True
+        
+        try:
+            outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
+            tree = outputFile.Get(self.treeNames[0])
+            
+            if not tree:
+                outputFile.Close()
+                return True
+            
+            wav_branch = tree.GetBranch("wav")
+            if wav_branch:
+                leaf = wav_branch.GetLeaf("wav")
+                leaf_title = leaf.GetTitle()
+                
+                # Extract channel count from "wav[2][N][39200]" format
+                import re
+                match = re.search(r'\[(\d+)\]\[(\d+)\]\[(\d+)\]', leaf_title)
+                if match:
+                    existing_nChannels = int(match.group(2))
+                    is_compatible = (existing_nChannels == len(self.channels))
+                    
+                    if not is_compatible:
+                        print(f"\n⚠️  WARNING: Channel count mismatch detected!")
+                        print(f"   Existing tree has {existing_nChannels} channels")
+                        print(f"   Current file has {len(self.channels)} channels: {self.channels}")
+                        print(f"   → Tree will be RECREATED to avoid data corruption\n")
+                    
+                    outputFile.Close()
+                    return is_compatible
+            
+            outputFile.Close()
+            return True
+            
+        except Exception as e:
+            print(f"Warning: Could not check tree compatibility: {e}")
+            return True
+
     def fillRootFile(self):
+        # Detect channels dynamically from the spectrum file
+        self.detectChannels()
+        
         if self.checkFileExists() is False:
             #If the file does not exists, it creates it and closes it
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "RECREATE")
             outputFile.Close()
             print(f"Creating new file at: {self.outputRootFileName} \n")
-        if self.checkTreeExists() is False:
+        
+        # Check tree compatibility
+        tree_compatible = self.checkTreeCompatibility()
+        
+        if self.checkTreeExists() is False or not tree_compatible:
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile. \n")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
@@ -118,8 +222,10 @@ class SpectrumConverter():
                         if channelN[0] not in self.channels:
                             continue
                         t[1] = timeStamp[1]
+                        # Use mapping to get correct array index
+                        channel_idx = self.channel_to_index[channelN[0]]
                         for index, element in enumerate(dataIni):
-                            data[1][channelN[0]][index] = float(element)
+                            data[1][channel_idx][index] = float(element)
 
                         pbar.update(fileId.tell() - pbar.n)
                     elif nEvent%2 == False:
@@ -138,8 +244,10 @@ class SpectrumConverter():
                         if channelN[0] not in self.channels:
                             continue
                         t[0] = timeStamp[0]
+                        # Use mapping to get correct array index
+                        channel_idx = self.channel_to_index[channelN[0]]
                         for index, element in enumerate(dataIni):
-                            data[0][channelN[0]][index] = float(element)
+                            data[0][channel_idx][index] = float(element)
                         pbar.update(fileId.tell() - pbar.n)
 
                 except:
