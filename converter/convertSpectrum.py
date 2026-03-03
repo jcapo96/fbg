@@ -43,54 +43,88 @@ class SpectrumConverter():
 
     def detectChannels(self):
         """
-        Detect which channels (0-15) contain valid data by sampling the spectrum file.
-        Only channels with actual data will be included in self.channels.
-        Creates a mapping from physical channel number to array index.
+        Detect which channels (0-15) have real fiber data by:
+        1. Navigating with nPoints (robust, same as fillRootFile) to avoid
+           corrupt packetSize jumps.
+        2. Sampling amplitude per channel - channels without a fiber connected
+           show max(|data|) < ~10 counts (noise floor), while real fibers
+           show thousands of counts.
         """
-        channels_found = set()
+        channel_max_amplitude = {}
+        MIN_NPOINTS = 100
+        MAX_NPOINTS = 50000
+        MAX_SYNC_RETRIES = 10000
+        AMPLITUDE_THRESHOLD = 50  # counts; noise floor is ~2-8, real signal is >1000
+
         try:
+            file_size = os.path.getsize(self.spectrumFileName)
+            sync_retries = 0
             with open(self.spectrumFileName, 'rb') as f:
-                # Read first 200 packets to detect all channels present
-                for _ in range(200):
+                while f.tell() < file_size - 44:
+                    pos_before = f.tell()
                     try:
-                        packetSize = np.fromfile(f, dtype='<i4', count=1)
-                        if len(packetSize) == 0:
-                            break
-                        packetSize = packetSize[0]
-                        
-                        timeStamp = np.fromfile(f, dtype='<u8', count=1)
-                        if len(timeStamp) == 0:
-                            break
-                        
+                        packetSize   = np.fromfile(f, dtype='<i4', count=1)
+                        timeStamp    = np.fromfile(f, dtype='<u8', count=1)
                         validityFlag = np.fromfile(f, dtype='<i4', count=1)
-                        if len(validityFlag) == 0:
+                        channelN     = np.fromfile(f, dtype='<i4', count=1)
+                        fibreN       = np.fromfile(f, dtype='<i4', count=1)
+                        startWL      = np.fromfile(f, dtype='<d',  count=1)
+                        finalWL      = np.fromfile(f, dtype='<d',  count=1)
+                        nPoints      = np.fromfile(f, dtype='<i4', count=1)
+
+                        if any(len(x) == 0 for x in [packetSize, timeStamp, validityFlag,
+                                                      channelN, fibreN, startWL, finalWL, nPoints]):
                             break
-                        
-                        channelN = np.fromfile(f, dtype='<i4', count=1)
-                        if len(channelN) == 0:
-                            break
-                        channelN = channelN[0]
-                        
-                        # Only accept valid channel numbers (0-15)
-                        if 0 <= channelN <= 15:
-                            channels_found.add(channelN)
-                        
-                        # Skip rest of packet to next one
-                        remaining = packetSize - 20  # 20 bytes already read
-                        f.seek(remaining, 1)
+
+                        nPoints_val    = nPoints[0]
+                        packetSize_val = packetSize[0]
+                        ch             = channelN[0]
+                        expected_packetSize = nPoints_val * 2 + 40
+
+                        valid = (MIN_NPOINTS <= nPoints_val <= MAX_NPOINTS and
+                                 0 <= ch <= 15 and
+                                 abs(packetSize_val - expected_packetSize) < 100)
+
+                        if not valid:
+                            f.seek(pos_before + 1)
+                            sync_retries += 1
+                            if sync_retries > MAX_SYNC_RETRIES:
+                                break
+                            continue
+
+                        sync_retries = 0
+
+                        # Read data and track max amplitude per channel
+                        data = np.fromfile(f, dtype='<i2', count=nPoints_val)
+                        amp = int(np.max(np.abs(data)))
+                        if ch not in channel_max_amplitude:
+                            channel_max_amplitude[ch] = amp
+                        else:
+                            channel_max_amplitude[ch] = max(channel_max_amplitude[ch], amp)
+
                     except:
                         break
+
         except Exception as e:
             print(f"Warning during channel detection: {e}")
-            if not channels_found:
+            if not channel_max_amplitude:
                 print("No channels detected, defaulting to [0,1,2]")
-                channels_found = {0, 1, 2}
-        
+                channel_max_amplitude = {0: 9999, 1: 9999, 2: 9999}
+
+        # Keep only channels with real fiber signal above noise floor
+        channels_found = {ch for ch, amp in channel_max_amplitude.items()
+                          if amp >= AMPLITUDE_THRESHOLD}
+
+        if channel_max_amplitude:
+            print(f"Channel detection summary (noise floor ≈ 2-8 counts, threshold = {AMPLITUDE_THRESHOLD}):")
+            for ch in sorted(channel_max_amplitude.keys()):
+                amp = channel_max_amplitude[ch]
+                status = "✓ FIBER DETECTED" if ch in channels_found else "✗ NO FIBER (noise only)"
+                print(f"  Channel {ch:2d}: max amplitude = {amp:6d}  {status}")
+
         self.channels = sorted(list(channels_found))
-        # Create mapping from physical channel number to array index
-        # e.g., if channels = [0, 3, 7], mapping = {0: 0, 3: 1, 7: 2}
         self.channel_to_index = {ch: idx for idx, ch in enumerate(self.channels)}
-        print(f"Detected {len(self.channels)} active channels: {self.channels}")
+        print(f"✅ Final channel list: {self.channels} ({len(self.channels)} channels)")
         return self
 
     def checkTreeCompatibility(self):
