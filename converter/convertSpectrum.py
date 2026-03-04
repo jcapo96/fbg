@@ -127,13 +127,12 @@ class SpectrumConverter():
         print(f"✅ Final channel list: {self.channels} ({len(self.channels)} channels)")
         return self
 
-    def checkTreeCompatibility(self):
+    def getExistingTreeChannelCount(self):
         """
-        Check if existing spectrum tree structure matches current file's channel count.
-        Returns True if compatible, False if channel count mismatch detected.
+        Get the number of channels in existing tree, or None if tree doesn't exist.
         """
         if not self.checkFileExists():
-            return True
+            return None
         
         try:
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "READ")
@@ -141,35 +140,92 @@ class SpectrumConverter():
             
             if not tree:
                 outputFile.Close()
-                return True
+                return None
             
+            # Get the wav branch to check dimensions
             wav_branch = tree.GetBranch("wav")
             if wav_branch:
+                # Get leaf title which contains dimensions like "wav[2][N][39200]"
                 leaf = wav_branch.GetLeaf("wav")
                 leaf_title = leaf.GetTitle()
                 
-                # Extract channel count from "wav[2][N][39200]" format
+                # Extract channel count from leaf title
                 import re
                 match = re.search(r'\[(\d+)\]\[(\d+)\]\[(\d+)\]', leaf_title)
                 if match:
                     existing_nChannels = int(match.group(2))
-                    is_compatible = (existing_nChannels == len(self.channels))
-                    
-                    if not is_compatible:
-                        print(f"\n⚠️  WARNING: Channel count mismatch detected!")
-                        print(f"   Existing tree has {existing_nChannels} channels")
-                        print(f"   Current file has {len(self.channels)} channels: {self.channels}")
-                        print(f"   → Tree will be RECREATED to avoid data corruption\n")
-                    
                     outputFile.Close()
-                    return is_compatible
+                    return existing_nChannels
             
             outputFile.Close()
-            return True
+            return None
             
         except Exception as e:
-            print(f"Warning: Could not check tree compatibility: {e}")
-            return True
+            print(f"Warning: Could not check existing channel count: {e}")
+            return None
+    
+    def mergeChannelLists(self, existing_nChannels):
+        """
+        When tree has more channels than current file, we need to preserve the original
+        channel list. We assume channels are stored sequentially starting from 0.
+        Current file channels will fill their positions, rest stay at zero.
+        
+        Returns: (all_channels_list, max_channel_count)
+        """
+        if existing_nChannels is None:
+            # No existing tree, use detected channels
+            return self.channels, len(self.channels)
+        
+        if existing_nChannels <= len(self.channels):
+            # Current file has same or more channels
+            return self.channels, len(self.channels)
+        
+        # Tree has MORE channels - need to accommodate all of them
+        # Assume tree was created with channels [0, 1, 2, ..., existing_nChannels-1]
+        # (This is a safe assumption since channels are stored by index)
+        all_channels = list(range(existing_nChannels))
+        
+        print(f"   Tree expects channels: {all_channels}")
+        print(f"   File contains channels: {self.channels}")
+        print(f"   Missing channels will be filled with zeros")
+        
+        return all_channels, existing_nChannels
+    
+    def checkTreeCompatibility(self):
+        """
+        Check if current file can be added to existing tree.
+        Strategy: Use max(existing, current) channels and pad with zeros.
+        Returns: (is_compatible, all_channels_list, max_channel_count, needs_recreation)
+        """
+        existing_nChannels = self.getExistingTreeChannelCount()
+        
+        if existing_nChannels is None:
+            # No existing tree, use current file's channel count
+            return (True, self.channels, len(self.channels), False)
+        
+        if existing_nChannels == len(self.channels):
+            # Perfect match, no issues
+            return (True, self.channels, len(self.channels), False)
+        
+        # Mismatch detected
+        if existing_nChannels > len(self.channels):
+            # Tree has MORE channels than current file (e.g., tree=5, file=4)
+            # Solution: Pad current file with zeros for missing channels
+            print(f"\n⚠️  Channel count mismatch:")
+            print(f"   Existing tree: {existing_nChannels} channels")
+            print(f"   Current file:  {len(self.channels)} channels {self.channels}")
+            print(f"   → Will pad file data with ZEROS for missing channels")
+            all_channels, max_count = self.mergeChannelLists(existing_nChannels)
+            return (True, all_channels, max_count, False)
+        else:
+            # Tree has FEWER channels than current file (e.g., tree=4, file=5)
+            # Solution: Recreate tree with more channels
+            print(f"\n❌ Channel count mismatch - tree needs expansion:")
+            print(f"   Existing tree: {existing_nChannels} channels")
+            print(f"   Current file:  {len(self.channels)} channels {self.channels}")
+            print(f"   → Tree will be RECREATED with {len(self.channels)} channels")
+            print(f"   ⚠️  Note: Old data will be lost. Process files in order from largest to smallest channel count.")
+            return (False, self.channels, len(self.channels), True)
 
     def fillRootFile(self):
         # Detect channels dynamically from the spectrum file
@@ -181,12 +237,26 @@ class SpectrumConverter():
             outputFile.Close()
             print(f"Creating new file at: {self.outputRootFileName} \n")
         
-        # Check tree compatibility
-        tree_compatible = self.checkTreeCompatibility()
+        # ✅ NEW: Check compatibility and determine channel count to use
+        is_compatible, all_channels, tree_nChannels, _ = self.checkTreeCompatibility()
         
-        if self.checkTreeExists() is False or not tree_compatible:
+        if not is_compatible:
+            print(f"\n{'='*70}")
+            print(f"Tree needs recreation. Proceeding with {tree_nChannels} channels.")
+            print(f"{'='*70}\n")
+        
+        # Use tree_nChannels (max of existing and current) for array dimensions
+        # This allows padding with zeros for files with fewer channels
+        use_nChannels = tree_nChannels
+        
+        # Update channel_to_index mapping to work with the full channel list
+        # Map physical channel numbers to their index in the tree array
+        self.channel_to_index = {ch: idx for idx, ch in enumerate(all_channels)}
+        
+        if self.checkTreeExists() is False or not is_compatible:
             #If the trees are not in the rootfile, it creates them
             print(f"Trees: {self.treeNames} not existing in the rootfile. \n")
+            print(f"Creating tree with {use_nChannels} channel slots for channels: {all_channels}\n")
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
             outputTree = ROOT.TTree(self.treeNames[0], "Spectrums from I4G")
 
@@ -198,16 +268,23 @@ class SpectrumConverter():
             startWL = np.array([0.0], dtype=np.float32)
             finalWL = np.array([0.0], dtype=np.float32)
             nPoints = np.array([0.0], dtype=np.int32)
-            data = np.array([[[0.0 for _ in range(0, 39200)] for _ in range(len(self.channels))] for _ in range(self.nPols)])
+            data = np.array([[[0.0 for _ in range(0, 39200)] for _ in range(use_nChannels)] for _ in range(self.nPols)])
 
             outputTree.Branch("t", timeStamp, f"t[{self.nPols}]/D")
-            outputTree.Branch("wav", data, f"wav[{self.nPols}][{len(self.channels)}][39200]/D")
+            outputTree.Branch("wav", data, f"wav[{self.nPols}][{use_nChannels}][39200]/D")
 
             outputFile.cd()
             outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
             outputFile.Close()
 
-        print(f"Start filling: '{self.outputRootFileName}' from file: '{self.spectrumFileName}' \n")
+        print(f"Start filling: '{self.outputRootFileName}' from file: '{self.spectrumFileName}'")
+        print(f"File has {len(self.channels)} channels {self.channels}, tree accommodates {use_nChannels} channels {all_channels}")
+        if len(self.channels) < use_nChannels:
+            missing_channels = [ch for ch in all_channels if ch not in self.channels]
+            print(f"→ Channels {missing_channels} will be filled with ZEROS (not present in file)\n")
+        else:
+            print()
+        
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
         packetSize = np.array([0.0], dtype=np.int32)
@@ -219,7 +296,7 @@ class SpectrumConverter():
         startWL = np.array([0.0], dtype=np.float32)
         finalWL = np.array([0.0], dtype=np.float32)
         nPoints = np.array([0.0], dtype=np.int32)
-        data = np.array([[[0.0 for _ in range(0, 39200)] for _ in range(len(self.channels))] for _ in range(self.nPols)])
+        data = np.array([[[0.0 for _ in range(0, 39200)] for _ in range(use_nChannels)] for _ in range(self.nPols)])
 
         outputTree.SetBranchAddress("t", t)
         outputTree.SetBranchAddress("wav", data)

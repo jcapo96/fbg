@@ -586,7 +586,7 @@ def fillRootFile(self, chunksize=None):
 | Converter | Dynamic Detection | Needs Fix If... | Priority |
 |-----------|-------------------|-----------------|----------|
 | **Peak** | ✅ Implemented | Add/remove FBG sensors | ✅ DONE |
-| **Spectrum** | ❌ Hardcoded (3 channels) | Add/remove fiber channels | 🔵 Future |
+| **Spectrum** | ✅ Implemented | Add/remove fiber channels | ✅ DONE |
 | **RTD** | ✅ Already dynamic | Add/remove RTD sensors | 🟡 Future |
 | **Pressure** | N/A (single sensor) | N/A | - |
 | **Humidity** | N/A (fixed layout) | N/A | - |
@@ -594,12 +594,149 @@ def fillRootFile(self, chunksize=None):
 
 ---
 
-## �📝 Git Branch
+## 🐛 Bug Fix #2: Dynamic Channel Support in Spectrum Converter (March 2026)
 
-Branch: `fix/peak-sensor-mismatch`
-Commit: 048656cb
+### Problem Description
 
-## 👤 Author
+**Same issue as Peak converter**, but for spectrum files:
 
-Victor Garcia (vgarciap)
-Date: December 1, 2025
+When processing multiple spectrum files with **different numbers of channels** (fiber channels), the converter would:
+1. Create tree based on first file's channel count
+2. **Lose data** from subsequent files with different channel counts
+3. Fail to accommodate growing channel configurations
+
+**Example Scenario:**
+1. Process `spectrum_1.dat` (channels: [0]) → Creates tree with `wav[2][1][39200]` ✅
+2. Process `spectrum_2.dat` (channels: [0, 1]) → Detects incompatibility
+3. **RECREATES tree** → ❌ **DELETES spectrum_1 data!**
+4. Result: Only spectrum_2 data remains
+
+### Root Cause
+
+1. **Hardcoded channel detection**: `detectChannels()` only detected channels in current file
+2. **No padding strategy**: Tree recreation on mismatch deleted old data
+3. **No channel merging**: Couldn't handle subset of channels in subsequent files
+
+### Solution Implemented
+
+Applied **same zero-padding strategy as Peak converter**:
+
+#### New Methods Added
+
+1. **`getExistingTreeChannelCount()`** - Detects channel count in existing tree
+   ```python
+   def getExistingTreeChannelCount(self):
+       """
+       Get the number of channels in existing tree from ROOT branch dimensions.
+       Parses leaf title like "wav[2][N][39200]" to extract N.
+       """
+   ```
+
+2. **`mergeChannelLists()`** - Merges detected channels with tree requirements
+   ```python
+   def mergeChannelLists(self, existing_nChannels):
+       """
+       When tree has more channels, preserve full channel list.
+       Assumes channels stored sequentially [0, 1, 2, ..., N-1].
+       Missing channels in current file → filled with zeros.
+       """
+   ```
+
+3. **`checkTreeCompatibility()`** - Enhanced version from Peak converter
+   ```python
+   def checkTreeCompatibility(self):
+       """
+       Returns: (is_compatible, all_channels_list, max_channel_count, needs_recreation)
+       
+       Cases:
+       - Tree has MORE channels → Pad current file with zeros ✅
+       - Tree has FEWER channels → Recreate tree (warns about data loss) ⚠️
+       - Perfect match → No issues ✅
+       """
+   ```
+
+#### Modified Logic Flow
+
+**Before:**
+```python
+self.detectChannels()  # Only current file
+if tree_exists and channels != existing:
+    recreate_tree()  # ❌ Deletes old data!
+```
+
+**After:**
+```python
+self.detectChannels()  # Detect in current file
+is_compatible, all_channels, use_nChannels, needs_recreation = self.checkTreeCompatibility()
+
+# Merge channel lists - accommodate maximum
+self.channel_to_index = {ch: idx for idx, ch in enumerate(all_channels)}
+
+# Create tree with max channel count
+data = np.array([[[0.0]*39200 for _ in range(use_nChannels)] for _ in range(2)])
+
+# Missing channels automatically zero-padded ✅
+```
+
+### Key Improvements
+
+1. **Zero-padding for missing channels** - Files with fewer channels pad with zeros
+2. **Channel list merging** - Preserves all channels seen across files
+3. **Proper index mapping** - `channel_to_index` maps physical channel to array position
+4. **Clear user feedback** - Warns when channels missing/added
+
+### Example Output
+
+```
+Channel detection summary (noise floor ≈ 2-8 counts, threshold = 50):
+  Channel  0: max amplitude =   8234  ✓ FIBER DETECTED
+  Channel  1: max amplitude =      3  ✗ NO FIBER (noise only)
+✅ Final channel list: [0] (1 channels)
+
+⚠️  Channel count mismatch:
+   Existing tree: 2 channels
+   Current file:  1 channels [0]
+   → Will pad file data with ZEROS for missing channels
+   Tree expects channels: [0, 1]
+   File contains channels: [0]
+   Missing channels will be filled with zeros
+
+Start filling: 'output.root' from file: 'spectrum_1.dat'
+File has 1 channels [0], tree accommodates 2 channels [0, 1]
+→ Channels [1] will be filled with ZEROS (not present in file)
+```
+
+### Verification
+
+Test that:
+1. First file with 1 channel → creates tree with 1 channel ✅
+2. Second file with 2 channels → recreates tree with 2 channels ⚠️ (warns about data loss)
+3. **BETTER APPROACH**: Process largest channel count first:
+   - First: 2 channels → tree with 2 channels ✅
+   - Second: 1 channel → pads with zeros ✅
+   - **All data preserved** 🎉
+
+### Recommendations
+
+Just like Peak converter, when processing multiple spectrum files:
+
+1. **Sort files by channel count** (descending) before processing
+2. Or use `detectChannels()` to scan all files first, create tree with max count
+3. Monitor warnings about tree recreation (indicates potential data loss)
+
+---
+
+## 📝 Git History
+
+**Bug Fix #1 - Peak Converter**
+- Branch: `fix/peak-sensor-mismatch`
+- Commit: 048656cb
+- Author: Victor Garcia (vgarciap)
+- Date: December 1, 2025
+
+**Bug Fix #2 - Spectrum Converter**
+- Applied: March 4, 2026
+- Same pattern as Peak converter
+- Author: Victor Garcia (vgarciap)
+
+---
