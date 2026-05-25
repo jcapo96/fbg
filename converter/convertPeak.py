@@ -10,7 +10,7 @@ def reshapeEpochTime(timestamp):
     dt = datetime.utcfromtimestamp(timestamp * 10**-9)
     today = datetime.utcnow()
     if dt > today:
-        dt -= timedelta(days=70*365+17, minutes=1, seconds=15)
+        dt -= timedelta(days=70*365+17, minutes=1, seconds=25)
     return dt.timestamp()
 
 class PeakConverter():
