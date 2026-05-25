@@ -10,7 +10,7 @@ def reshapeEpochTime(timestamp):
     dt = datetime.utcfromtimestamp(timestamp * 10**-9)
     today = datetime.utcnow()
     if dt > today:
-        dt -= timedelta(days=70*365+17)
+        dt -= timedelta(days=70*365+17, minutes=1)
     return dt.timestamp()
 
 class PeakConverter():
@@ -76,7 +76,7 @@ class PeakConverter():
 
     def checkFileExists(self):
         if os.path.isfile(self.outputRootFileName):
-            print(f"File {self.outputRootFileName} exists.")
+            print(f"File {self.outputRootFileName} exists. VICKY.")
         return os.path.isfile(self.outputRootFileName)
 
     def checkTreeExists(self):
@@ -188,7 +188,7 @@ class PeakConverter():
             outputFile.Close()
             print(f"Creating new file at: {self.outputRootFileName} \n")
         
-        # ✅ NEW: Check compatibility and determine sensor count to use
+        # ✅ Check compatibility and determine sensor count to use
         is_compatible, tree_nSensors, needs_expansion = self.checkTreeCompatibility()
         
         if not is_compatible:
@@ -198,7 +198,6 @@ class PeakConverter():
             return  # Exit without processing
         
         # Use tree_nSensors (max of existing and current) for array dimensions
-        # This allows padding with zeros for files with fewer sensors
         use_nSensors = tree_nSensors
         
         if self.checkTreeExists() is False:
@@ -208,19 +207,11 @@ class PeakConverter():
             outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
             outputTree = ROOT.TTree(self.treeNames[0], "Peaks fitted by I4G")
 
-            # t = np.array([0.0 for _ in range(self.nPols)])
-            # wav = np.array([0.0 for _ in range(use_nSensors)] for _ in range(self.nPols))
-            # sweep = np.array([0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)) #this is the time the signal takes to come back to the I4G (SWEEP TIME)
-            # ch = np.array([0.0 for _ in range(use_nSensors)])
-            # pos = np.array([0.0 for _ in range(use_nSensors)])
-
             t = np.zeros(self.nPols, dtype=np.float64)
             wav = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
             sweep = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
-            # ✅ FIX: ch and pos should be 1D arrays, not 2D
             ch = np.zeros(use_nSensors, dtype=np.float64)
             pos = np.zeros(use_nSensors, dtype=np.float64)
-
 
             outputTree.Branch("t", t, f"t[{self.nPols}]/D")
             outputTree.Branch("wav", wav, f"wav[{self.nPols}][{use_nSensors}]/D")
@@ -240,32 +231,17 @@ class PeakConverter():
         outputFile = ROOT.TFile(f"{self.outputRootFileName}", "UPDATE")
         outputTree = outputFile.Get(self.treeNames[0])
 
-        # t = np.array([0.0 for _ in range(self.nPols)])
-        # wav = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
-        # sweep = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
-        # ch = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
-        # pos = np.array([[0.0 for _ in range(use_nSensors)] for _ in range(self.nPols)])
-
         t = np.zeros(self.nPols, dtype=np.float64)
         wav = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
         sweep = np.zeros((self.nPols, use_nSensors), dtype=np.float64)
-        # ✅ FIX: ch and pos should be 1D arrays, not 2D
         ch = np.zeros(use_nSensors, dtype=np.float64)
         pos = np.zeros(use_nSensors, dtype=np.float64)
-
 
         outputTree.SetBranchAddress("t", t)
         outputTree.SetBranchAddress("wav", wav)
         outputTree.SetBranchAddress("sweep", sweep)
         outputTree.SetBranchAddress("ch", ch)
         outputTree.SetBranchAddress("pos", pos)
-
-        # outputTree.Branch("t", t, f"t[{self.nPols}]/D")
-        # outputTree.Branch("wav", wav, f"wav[{self.nPols}][{self.nSensors}]/D")
-        # outputTree.Branch("sweep", sweep, f"sweep[{self.nPols}][{self.nSensors}]/D")
-        # outputTree.Branch("ch", ch, f"ch[{self.nSensors}]/D")
-        # outputTree.Branch("pos", pos, f"pos[{self.nSensors}]/D")
-
 
         peakData = pd.read_csv(self.peakFileName, sep="\t", header=None, names=self.header,
                                chunksize=chunksize, on_bad_lines="warn")
@@ -274,71 +250,62 @@ class PeakConverter():
         line_count = int(result.stdout.split()[0])
 
         if chunksize is not None:
+            line_in_pair = 0
             with tqdm(total=line_count) as pbar:
                 for nChunk, chunk in enumerate(peakData):
                     chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
                     for index, row in chunk.iterrows():
                         nSens = 0
+                        is_second_pol = (line_in_pair == 1)
+                        pol_idx = 1 if is_second_pol else 0
+
                         for element in chunk.columns:
-                            if (index%2 == True):
-                                if "epoch" in element:
-                                    t[1] = row[element]
-                                elif "Wav" in element:
-                                    wav[1][nSens] = row[element]
-                                    # ✅ FIX: ch and pos are 1D, not 2D
-                                    ch[nSens] = int(element.split("Wav")[1].split("_")[0])
-                                    pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
-                                elif "Ptime" in element:
-                                    sweep[1][nSens] = row[element]
-                                    nSens += 1
-                            elif (index%2 == False):
-                                if "epoch" in element:
-                                    t[0] = row[element]
-                                elif "Wav" in element:
-                                    wav[0][nSens] = row[element]
-                                    # ✅ FIX: ch and pos are 1D, not 2D
-                                    ch[nSens] = int(element.split("Wav")[1].split("_")[0])
-                                    pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
-                                elif "Ptime" in element:
-                                    sweep[0][nSens] = row[element]
-                                    nSens += 1
-                        if index%2 == True:
+                            if "epoch" in element:
+                                t[pol_idx] = row[element]
+                            elif "Wav" in element:
+                                wav[pol_idx][nSens] = row[element]
+                                ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                                pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                            elif "Ptime" in element:
+                                sweep[pol_idx][nSens] = row[element]
+                                nSens += 1
+
+                        if is_second_pol:
                             outputTree.Fill()
+                            line_in_pair = 0
+                        else:
+                            line_in_pair = 1
                         pbar.update(1)
+
         elif chunksize is None:
             chunk = peakData
             chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
             print(f"{len(chunk)} entries in total:")
+            line_in_pair = 0
             with tqdm(total=len(chunk)) as pbar:
                 for index, row in chunk.iterrows():
                     nSens = 0
+                    is_second_pol = (line_in_pair == 1)
+                    pol_idx = 1 if is_second_pol else 0
+
                     for element in chunk.columns:
-                        if (index%2 == True):
-                            if "epoch" in element:
-                                t[0] = row[element]
-                            elif "Wav" in element:
-                                wav[0][nSens] = row[element]
-                                # ✅ FIX: ch and pos are 1D, not 2D
-                                ch[nSens] = int(element.split("Wav")[1].split("_")[0])
-                                pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
-                            elif "Ptime" in element:
-                                sweep[0][nSens] = row[element]
-                                nSens += 1
-                        elif (index%2 == False):
-                            if "epoch" in element:
-                                t[1] = row[element]
-                            elif "Wav" in element:
-                                wav[1][nSens] = row[element]
-                                # ✅ FIX: ch and pos are 1D, not 2D
-                                ch[nSens] = int(element.split("Wav")[1].split("_")[0])
-                                pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
-                            elif "Ptime" in element:
-                                # ✅ FIX: Should be sweep[1], not sweep[0]
-                                sweep[1][nSens] = row[element]
-                                nSens += 1
-                    if index%2 == True:
+                        if "epoch" in element:
+                            t[pol_idx] = row[element]
+                        elif "Wav" in element:
+                            wav[pol_idx][nSens] = row[element]
+                            ch[nSens] = int(element.split("Wav")[1].split("_")[0])
+                            pos[nSens] = float(element.split("Wav")[1].split("_")[1])*50
+                        elif "Ptime" in element:
+                            sweep[pol_idx][nSens] = row[element]
+                            nSens += 1
+
+                    if is_second_pol:
                         outputTree.Fill()
+                        line_in_pair = 0
+                    else:
+                        line_in_pair = 1
                     pbar.update(1)
+
         outputFile.cd()
         outputTree.Write(self.treeNames[0], ROOT.TObject.kWriteDelete)
         outputFile.Close()
