@@ -10,7 +10,7 @@ def reshapeEpochTime(timestamp):
     dt = datetime.utcfromtimestamp(timestamp * 10**-9)
     today = datetime.utcnow()
     if dt > today:
-        dt -= timedelta(days=70*365+17, minutes=1)
+        dt -= timedelta(days=70*365+17, minutes=1, seconds=15)
     return dt.timestamp()
 
 class PeakConverter():
@@ -249,11 +249,35 @@ class PeakConverter():
         result = subprocess.run(['wc', '-l', self.peakFileName], capture_output=True, text=True)
         line_count = int(result.stdout.split()[0])
 
+        # 🧠 Inicializar o recuperar memoria de polarizaciones compartida entre ejecuciones
+        if not hasattr(self.__class__, '_global_last_wavs'):
+            self.__class__._global_last_wavs = None
+
         if chunksize is not None:
             line_in_pair = 0
             with tqdm(total=line_count) as pbar:
                 for nChunk, chunk in enumerate(peakData):
                     chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
+                    
+                    # 🔍 ALINEADOR INTELIGENTE (Solo al inicio del archivo/primer chunk)
+                    if nChunk == 0 and self.__class__._global_last_wavs is not None:
+                        first_row = chunk.iloc[0]
+                        current_wavs = []
+                        for element in chunk.columns:
+                            if "Wav" in element:
+                                current_wavs.append(first_row[element])
+                        current_wavs = np.array(current_wavs)
+                        
+                        # Comparar la primera fila con la memoria del .txt anterior
+                        diff_pol0 = np.mean(np.abs(current_wavs - self.__class__._global_last_wavs[0][:len(current_wavs)]))
+                        diff_pol1 = np.mean(np.abs(current_wavs - self.__class__._global_last_wavs[1][:len(current_wavs)]))
+                        
+                        if diff_pol1 < diff_pol0:
+                            print(f"\n⚠️  [Alineador VICKY] ¡Salto detectado entre ficheros! Empezando en Pol 1 (diff P1: {diff_pol1:.4f} vs P0: {diff_pol0:.4f})")
+                            line_in_pair = 1
+                        else:
+                            print(f"\n✅ [Alineador VICKY] Fichero alineado correctamente. Empezando en Pol 0 (diff P0: {diff_pol0:.4f} vs P1: {diff_pol1:.4f})")
+
                     for index, row in chunk.iterrows():
                         nSens = 0
                         is_second_pol = (line_in_pair == 1)
@@ -271,6 +295,8 @@ class PeakConverter():
                                 nSens += 1
 
                         if is_second_pol:
+                            # Guardar estado ordenado antes de rellenar ROOT
+                            self.__class__._global_last_wavs = np.copy(wav)
                             outputTree.Fill()
                             line_in_pair = 0
                         else:
@@ -282,6 +308,25 @@ class PeakConverter():
             chunk["epochTime"] = chunk["epochTime"].apply(reshapeEpochTime)
             print(f"{len(chunk)} entries in total:")
             line_in_pair = 0
+            
+            # 🔍 ALINEADOR INTELIGENTE (Modo sin chunks)
+            if self.__class__._global_last_wavs is not None and len(chunk) > 0:
+                first_row = chunk.iloc[0]
+                current_wavs = []
+                for element in chunk.columns:
+                    if "Wav" in element:
+                        current_wavs.append(first_row[element])
+                current_wavs = np.array(current_wavs)
+                
+                diff_pol0 = np.mean(np.abs(current_wavs - self.__class__._global_last_wavs[0][:len(current_wavs)]))
+                diff_pol1 = np.mean(np.abs(current_wavs - self.__class__._global_last_wavs[1][:len(current_wavs)]))
+                
+                if diff_pol1 < diff_pol0:
+                    print(f"\n⚠️  [Alineador VICKY] ¡Salto detectado entre ficheros! Empezando en Pol 1 (diff P1: {diff_pol1:.4f} vs P0: {diff_pol0:.4f})")
+                    line_in_pair = 1
+                else:
+                    print(f"\n✅ [Alineador VICKY] Fichero alineado correctamente. Empezando en Pol 0 (diff P0: {diff_pol0:.4f} vs P1: {diff_pol1:.4f})")
+
             with tqdm(total=len(chunk)) as pbar:
                 for index, row in chunk.iterrows():
                     nSens = 0
@@ -300,6 +345,7 @@ class PeakConverter():
                             nSens += 1
 
                     if is_second_pol:
+                        self.__class__._global_last_wavs = np.copy(wav)
                         outputTree.Fill()
                         line_in_pair = 0
                     else:
